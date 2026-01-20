@@ -1,47 +1,84 @@
-using System.Speech.Recognition;
+using Vosk;
+using NAudio.Wave;
+using System.Text.Json;
 
 namespace WinFormTest;
 
 public class SpeechRecognitionService : IDisposable
 {
-  private SpeechRecognitionEngine? recognitionEngine;
+  private Model? voskModel;
+  private VoskRecognizer? recognizer;
+  private WaveInEvent? waveIn;
   private bool isListening = false;
+  private readonly object lockObject = new object();
 
   public event EventHandler<string>? SpeechRecognized;
+  public event EventHandler<string>? SpeechPartialResult; // For real-time display only
   public event EventHandler<string>? SpeechRejected;
 
   public bool IsListening => isListening;
 
   public SpeechRecognitionService()
   {
-    try
-    {
-      recognitionEngine = new SpeechRecognitionEngine();
-      
-      // Load default dictation grammar
-      var dictationGrammar = new DictationGrammar();
-      recognitionEngine.LoadGrammar(dictationGrammar);
+    // Model will be loaded asynchronously via InitializeAsync
+  }
 
-      // Set recognition confidence threshold
-      recognitionEngine.SpeechRecognized += RecognitionEngine_SpeechRecognized;
-      recognitionEngine.SpeechRecognitionRejected += RecognitionEngine_SpeechRecognitionRejected;
-    }
-    catch (Exception ex)
+  public async Task InitializeAsync()
+  {
+    await Task.Run(() =>
     {
-      throw new Exception($"Failed to initialize speech recognition: {ex.Message}", ex);
+      try
+      {
+        InitializeVoskModel();
+      }
+      catch (Exception ex)
+      {
+        throw new Exception($"Failed to initialize speech recognition: {ex.Message}", ex);
+      }
+    });
+  }
+
+  public bool IsModelLoaded => voskModel != null && recognizer != null;
+
+  private void InitializeVoskModel()
+  {
+    // Model path: Application.StartupPath/models/vosk-model-en-us-0.22/
+    string modelPath = Path.Combine(Application.StartupPath, "models", "vosk-model-en-us-0.22");
+    
+    if (!Directory.Exists(modelPath))
+    {
+      throw new Exception($"Vosk model not found at: {modelPath}\n" +
+                         "Please download the English small model from https://alphacephei.com/vosk/models\n" +
+                         "Extract it to: " + modelPath);
     }
+
+    voskModel = new Model(modelPath);
+    recognizer = new VoskRecognizer(voskModel, 16000.0f);
+    recognizer.SetMaxAlternatives(0);
+    recognizer.SetWords(true);
   }
 
   public void StartListening()
   {
-    if (recognitionEngine == null || isListening)
+    if (voskModel == null || recognizer == null || isListening)
       return;
 
     try
     {
-      recognitionEngine.SetInputToDefaultAudioDevice();
-      recognitionEngine.RecognizeAsync(RecognizeMode.Multiple);
-      isListening = true;
+      lock (lockObject)
+      {
+        // Initialize NAudio for microphone capture
+        waveIn = new WaveInEvent();
+        waveIn.WaveFormat = new WaveFormat(16000, 1); // 16kHz, Mono, 16-bit
+        waveIn.DataAvailable += WaveIn_DataAvailable;
+        waveIn.RecordingStopped += WaveIn_RecordingStopped;
+
+        // Reset recognizer for new session
+        recognizer.Reset();
+
+        waveIn.StartRecording();
+        isListening = true;
+      }
     }
     catch (Exception ex)
     {
@@ -51,13 +88,23 @@ public class SpeechRecognitionService : IDisposable
 
   public void StopListening()
   {
-    if (recognitionEngine == null || !isListening)
+    if (waveIn == null || !isListening)
       return;
 
     try
     {
-      recognitionEngine.RecognizeAsyncStop();
-      isListening = false;
+      lock (lockObject)
+      {
+        waveIn.StopRecording();
+        isListening = false;
+
+        // Get final result
+        if (recognizer != null)
+        {
+          string finalResult = recognizer.FinalResult();
+          ProcessFinalResult(finalResult);
+        }
+      }
     }
     catch
     {
@@ -65,28 +112,109 @@ public class SpeechRecognitionService : IDisposable
     }
   }
 
-  private void RecognitionEngine_SpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
+  private void WaveIn_DataAvailable(object? sender, WaveInEventArgs e)
   {
-    // Lowered threshold from 0.7 to 0.3 to accept more recognition results
-    // Even with lower confidence, we want to capture speech input
-    if (e.Result.Confidence >= 0.3 && !string.IsNullOrWhiteSpace(e.Result.Text))
+    if (recognizer == null || e.BytesRecorded == 0)
+      return;
+
+    try
     {
-      SpeechRecognized?.Invoke(this, e.Result.Text);
+      lock (lockObject)
+      {
+        // Process audio chunk through Vosk
+        if (recognizer.AcceptWaveform(e.Buffer, e.BytesRecorded))
+        {
+          // Finalized result (sentence completed)
+          string result = recognizer.Result();
+          ProcessFinalResult(result);
+        }
+        else
+        {
+          // Partial result (words as they are spoken)
+          string partialResult = recognizer.PartialResult();
+          ProcessPartialResult(partialResult);
+        }
+      }
     }
-    else
+    catch (Exception ex)
     {
-      SpeechRejected?.Invoke(this, e.Result.Text);
+      // Log error but don't stop recognition
+      System.Diagnostics.Debug.WriteLine($"Error processing audio: {ex.Message}");
     }
   }
 
-  private void RecognitionEngine_SpeechRecognitionRejected(object? sender, SpeechRecognitionRejectedEventArgs e)
+  private void WaveIn_RecordingStopped(object? sender, StoppedEventArgs e)
   {
-    SpeechRejected?.Invoke(this, "Recognition rejected");
+    // Cleanup handled in StopListening
+  }
+
+  private void ProcessPartialResult(string jsonResult)
+  {
+    if (string.IsNullOrWhiteSpace(jsonResult))
+      return;
+
+    try
+    {
+      using (JsonDocument doc = JsonDocument.Parse(jsonResult))
+      {
+        if (doc.RootElement.TryGetProperty("partial", out JsonElement partialElement))
+        {
+          string partialText = partialElement.GetString() ?? string.Empty;
+          if (!string.IsNullOrWhiteSpace(partialText))
+          {
+            // Emit partial result for real-time display only (not for accumulation)
+            SpeechPartialResult?.Invoke(this, partialText);
+          }
+        }
+      }
+    }
+    catch
+    {
+      // Ignore JSON parsing errors
+    }
+  }
+
+  private void ProcessFinalResult(string jsonResult)
+  {
+    if (string.IsNullOrWhiteSpace(jsonResult))
+      return;
+
+    try
+    {
+      using (JsonDocument doc = JsonDocument.Parse(jsonResult))
+      {
+        if (doc.RootElement.TryGetProperty("text", out JsonElement textElement))
+        {
+          string recognizedText = textElement.GetString() ?? string.Empty;
+          if (!string.IsNullOrWhiteSpace(recognizedText))
+          {
+            // Emit final result (DashboardForm will handle accumulation)
+            SpeechRecognized?.Invoke(this, recognizedText);
+          }
+        }
+        else
+        {
+          // No text recognized
+          SpeechRejected?.Invoke(this, "Recognition rejected");
+        }
+      }
+    }
+    catch
+    {
+      // Ignore JSON parsing errors
+      SpeechRejected?.Invoke(this, "Recognition rejected");
+    }
   }
 
   public void Dispose()
   {
     StopListening();
-    recognitionEngine?.Dispose();
+    
+    lock (lockObject)
+    {
+      waveIn?.Dispose();
+      recognizer?.Dispose();
+      voskModel?.Dispose();
+    }
   }
 }

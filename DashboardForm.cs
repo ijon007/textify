@@ -12,6 +12,8 @@ public partial class DashboardForm : Form
   private SpeechOverlayForm? overlayForm;
   private string? recognizedText;
   private DatabaseService? databaseService;
+  private Panel? loadingPanel;
+  private Label? loadingLabel;
 
   public DashboardForm(string username)
   {
@@ -27,17 +29,43 @@ public partial class DashboardForm : Form
     }
     
     databaseService = new DatabaseService();
-    InitializeSpeechServices();
     LoadDashboardData();
+    InitializeLoadingUI();
+    InitializeSpeechServicesAsync();
   }
 
-  private void InitializeSpeechServices()
+  private void InitializeLoadingUI()
+  {
+    // Create loading panel
+    loadingPanel = new Panel();
+    loadingPanel.Dock = DockStyle.Fill;
+    loadingPanel.BackColor = Color.FromArgb(45, 45, 48);
+    loadingPanel.Visible = true;
+    loadingPanel.BringToFront();
+
+    // Create loading label
+    loadingLabel = new Label();
+    loadingLabel.Text = "Loading speech recognition model...\nPlease wait...";
+    loadingLabel.Font = new Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point);
+    loadingLabel.ForeColor = Color.White;
+    loadingLabel.AutoSize = false;
+    loadingLabel.TextAlign = ContentAlignment.MiddleCenter;
+    loadingLabel.Dock = DockStyle.Fill;
+    loadingLabel.Padding = new Padding(20);
+
+    loadingPanel.Controls.Add(loadingLabel);
+    this.Controls.Add(loadingPanel);
+    loadingPanel.BringToFront();
+  }
+
+  private async void InitializeSpeechServicesAsync()
   {
     try
     {
-      // Initialize speech recognition service
+      // Initialize speech recognition service (model loading happens async)
       speechService = new SpeechRecognitionService();
       speechService.SpeechRecognized += SpeechService_SpeechRecognized;
+      speechService.SpeechPartialResult += SpeechService_SpeechPartialResult;
 
       // Initialize text injection service
       textInjectionService = new TextInjectionService();
@@ -51,11 +79,41 @@ public partial class DashboardForm : Form
       // Initialize overlay form
       overlayForm = new SpeechOverlayForm();
       overlayForm.Hide();
+
+      // Load model asynchronously
+      UpdateLoadingText("Loading Vosk model...");
+      await speechService.InitializeAsync();
+      
+      // Hide loading panel once model is loaded
+      if (loadingPanel != null)
+      {
+        loadingPanel.Visible = false;
+        loadingPanel.Dispose();
+        loadingPanel = null;
+      }
     }
     catch (Exception ex)
     {
+      if (loadingPanel != null)
+      {
+        loadingPanel.Visible = false;
+        loadingPanel.Dispose();
+        loadingPanel = null;
+      }
       MessageBox.Show($"Failed to initialize speech services: {ex.Message}", "Error", 
         MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+  }
+
+  private void UpdateLoadingText(string text)
+  {
+    if (loadingLabel != null && loadingLabel.InvokeRequired)
+    {
+      loadingLabel.Invoke(new Action(() => loadingLabel.Text = text));
+    }
+    else if (loadingLabel != null)
+    {
+      loadingLabel.Text = text;
     }
   }
 
@@ -73,6 +131,14 @@ public partial class DashboardForm : Form
   {
     if (speechService == null || overlayForm == null || textInjectionService == null)
       return;
+
+    // Check if model is loaded
+    if (!speechService.IsModelLoaded)
+    {
+      MessageBox.Show("Speech recognition model is still loading. Please wait...", "Loading",
+        MessageBoxButtons.OK, MessageBoxIcon.Information);
+      return;
+    }
 
     try
     {
@@ -126,12 +192,25 @@ public partial class DashboardForm : Form
     }
   }
 
+  private void SpeechService_SpeechPartialResult(object? sender, string text)
+  {
+    // Partial results are for real-time display only - don't accumulate
+    // Show current accumulated text + partial result for preview
+    if (overlayForm != null && !string.IsNullOrWhiteSpace(text))
+    {
+      string displayText = string.IsNullOrEmpty(recognizedText) 
+        ? text 
+        : recognizedText + " " + text;
+      overlayForm.SetRecognizedText(displayText);
+    }
+  }
+
   private void SpeechService_SpeechRecognized(object? sender, string text)
   {
     if (overlayForm == null)
       return;
 
-    // Accumulate recognized text (append with space if there's existing text)
+    // Accumulate final recognized text (append with space if there's existing text)
     if (string.IsNullOrEmpty(recognizedText))
     {
       recognizedText = text;

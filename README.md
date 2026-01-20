@@ -4,7 +4,7 @@ A Windows Forms application that provides speech-to-text functionality with glob
 
 ## Features
 
-- **Speech Recognition**: Convert speech to text using Windows Speech Recognition
+- **Speech Recognition**: Convert speech to text using Vosk offline speech recognition
 - **Global Hotkey**: Press `Ctrl + Win` to start/stop speech recognition from anywhere
 - **Text Injection**: Automatically injects recognized text into the active window
 - **Speech History**: View and copy your previous speech transcriptions
@@ -17,6 +17,7 @@ A Windows Forms application that provides speech-to-text functionality with glob
 - **.NET 10.0 SDK** or later
 - **SQL Server Express** (or any SQL Server instance)
 - **Microphone** for speech input
+- **Vosk Language Model** (English small model ~50MB)
 
 ## Setup
 
@@ -52,7 +53,21 @@ CREATE TABLE Speeches (
 INSERT INTO Users (Username, UserPass) VALUES ('testuser', 'testpass');
 ```
 
-### 3. Configure Database Connection
+### 3. Download Vosk Language Model
+
+1. Download the English small model from [Vosk Models](https://alphacephei.com/vosk/models)
+2. Extract the model folder (e.g., `vosk-model-en-us-0.22`)
+3. Place it in the `models` folder relative to your application:
+   ```
+   WinFormTest/
+   └── models/
+       └── vosk-model-en-us-0.22/
+   ```
+4. The model will be automatically loaded when the application starts
+
+**Note**: For better accuracy, you can use the large model (~1.8GB), but you'll need to update the model path in `SpeechRecognitionService.cs`.
+
+### 4. Configure Database Connection
 
 If your SQL Server instance is not `localhost\SQLEXPRESS`, update the connection string in:
 - `DatabaseService.cs` (line 11)
@@ -100,7 +115,7 @@ WinFormTest/
 ├── Form1.cs                    # Login form
 ├── DashboardForm.cs            # Main dashboard with speech history
 ├── SpeechOverlayForm.cs        # Visual overlay during speech recognition
-├── SpeechRecognitionService.cs # Handles Windows Speech Recognition
+├── SpeechRecognitionService.cs # Handles Vosk speech recognition
 ├── TextInjectionService.cs     # Injects text into active windows
 ├── GlobalHotkeyManager.cs      # Manages global hotkey registration
 ├── DatabaseService.cs          # Database operations
@@ -112,14 +127,17 @@ WinFormTest/
 ## Dependencies
 
 - `Microsoft.Data.SqlClient` (v5.2.2) - SQL Server connectivity
-- `System.Speech` (v8.0.0) - Windows Speech Recognition
+- `Vosk` (v0.3.38) - Offline speech recognition
+- `NAudio` (v2.2.1) - Audio capture for microphone input
 
 ## Troubleshooting
 
 ### Speech Recognition Not Working
 - Ensure your microphone is connected and working
-- Check Windows Speech Recognition settings in Control Panel
+- Verify the Vosk model is downloaded and placed in the `models` folder
+- Check that the model folder name matches `vosk-model-en-us-0.22` (or update the path in `SpeechRecognitionService.cs`)
 - Grant microphone permissions to the application
+- Ensure NAudio can access your default audio input device
 
 ### Database Connection Errors
 - Verify SQL Server is running
