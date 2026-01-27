@@ -1,12 +1,11 @@
 # TODO
 
 ## In Progress
-- **Dictionary Page** (panelDictionaryPage) - will be the place where the user can save custom words that the ai doesnt understand
+- **Snippets Page** (panelSnippetsPage) - will be the place where the user can add kind of shortcut words for longer things: e.g 'Twitter' - adds twitter link to the message
 - 
 
 ## Pending
 ### Pages to Build
-- **Snippets Page** (panelSnippetsPage) - will be the place where the user can add kind of shortcut words for longer things: e.g 'Twitter' - adds twitter link to the message
 - **Style Page** (panelStylePage) - user will be able to configure how the speech should be transcribed: formal, informal etc.
 - **Settings Page** (panelSettingsPage) - general user settings, change push to talk shortcut etc (will have to think)
 
@@ -14,8 +13,10 @@
 - **Add whisper voice model**
 - **Add ai correction and punctuation**
 - **Speech bubble** (speech overlay) - fix the animation and the diff states (+ add an idle state)
+- **Add poppins font** 
 
 ## Completed
+- **Dictionary Page** (panelDictionaryPage) - will be the place where the user can save custom words that the ai doesnt understand
 - **Home page stats**
 - **Login Form** (Form1) - Complete with authentication
 - **Home Page Base** (panelHomePage) - Complete with speech history, stats, and welcome message

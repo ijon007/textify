@@ -44,8 +44,32 @@ CREATE TABLE Speeches (
     Id INT PRIMARY KEY IDENTITY(1,1),
     Username NVARCHAR(50) NOT NULL,
     SpeechText NVARCHAR(MAX) NOT NULL,
-    CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
+    CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+    Duration INT NULL
 );
+
+-- Create Dictionary table
+CREATE TABLE Dictionary (
+    Id INT PRIMARY KEY IDENTITY(1,1),
+    Username NVARCHAR(50) NOT NULL,
+    Word NVARCHAR(100) NOT NULL,
+    CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+    UpdatedAt DATETIME NULL
+);
+
+-- Create Snippets table
+CREATE TABLE Snippets (
+    Id INT PRIMARY KEY IDENTITY(1,1),
+    Username NVARCHAR(50) NOT NULL,
+    Shortcut NVARCHAR(100) NOT NULL,
+    Replacement NVARCHAR(MAX) NOT NULL,
+    CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+    UpdatedAt DATETIME NULL
+);
+
+-- Add indexes for better performance
+CREATE INDEX IX_Snippets_Username ON Snippets(Username);
+CREATE UNIQUE INDEX IX_Snippets_Username_Shortcut ON Snippets(Username, Shortcut);
 ```
 
 4. (Optional) Create a test user:
