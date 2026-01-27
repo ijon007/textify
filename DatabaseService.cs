@@ -694,4 +694,97 @@ public class DatabaseService
       throw;
     }
   }
+
+  // User Settings Methods
+
+  public string GetUserStylePreference(string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      return "formal"; // Default style
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        
+        string query = "SELECT StylePreference FROM UserSettings WHERE Username = @username";
+        
+        using (SqlCommand command = new SqlCommand(query, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          
+          object? result = command.ExecuteScalar();
+          if (result != null && result != DBNull.Value)
+          {
+            return result.ToString() ?? "formal";
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to get user style preference: {ex.Message}");
+    }
+
+    return "formal"; // Default style
+  }
+
+  public void SaveUserStylePreference(string username, string style)
+  {
+    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(style))
+      throw new ArgumentException("Username and style cannot be empty.");
+
+    // Validate style value
+    if (style != "formal" && style != "casual" && style != "very_casual")
+      throw new ArgumentException("Invalid style value. Must be 'formal', 'casual', or 'very_casual'.");
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        
+        // Check if preference already exists
+        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
+        bool exists = false;
+        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
+        {
+          checkCommand.Parameters.AddWithValue("@username", username);
+          int count = (int)checkCommand.ExecuteScalar();
+          exists = count > 0;
+        }
+        
+        if (exists)
+        {
+          // Update existing preference
+          string updateQuery = "UPDATE UserSettings SET StylePreference = @style, UpdatedAt = @updatedAt WHERE Username = @username";
+          using (SqlCommand command = new SqlCommand(updateQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@style", style);
+            command.Parameters.AddWithValue("@updatedAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+        else
+        {
+          // Insert new preference
+          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, CreatedAt) VALUES (@username, @style, @createdAt)";
+          using (SqlCommand command = new SqlCommand(insertQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@style", style);
+            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to save user style preference: {ex.Message}");
+      throw;
+    }
+  }
 }

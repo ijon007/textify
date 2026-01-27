@@ -1,12 +1,11 @@
 # TODO
 
 ## In Progress
-- **Snippets Page** (panelSnippetsPage) - will be the place where the user can add kind of shortcut words for longer things: e.g 'Twitter' - adds twitter link to the message
+- **Style Page** (panelStylePage) - user will be able to configure how the speech should be transcribed: formal, informal etc.
 - 
 
 ## Pending
 ### Pages to Build
-- **Style Page** (panelStylePage) - user will be able to configure how the speech should be transcribed: formal, informal etc.
 - **Settings Page** (panelSettingsPage) - general user settings, change push to talk shortcut etc (will have to think)
 
 ### Other
@@ -16,6 +15,7 @@
 - **Add poppins font** 
 
 ## Completed
+- **Snippets Page** (panelSnippetsPage) - will be the place where the user can add kind of shortcut words for longer things: e.g 'Twitter' - adds twitter link to the message
 - **Dictionary Page** (panelDictionaryPage) - will be the place where the user can save custom words that the ai doesnt understand
 - **Home page stats**
 - **Login Form** (Form1) - Complete with authentication

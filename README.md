@@ -67,9 +67,19 @@ CREATE TABLE Snippets (
     UpdatedAt DATETIME NULL
 );
 
+-- Create UserSettings table
+CREATE TABLE UserSettings (
+    Id INT PRIMARY KEY IDENTITY(1,1),
+    Username NVARCHAR(50) NOT NULL,
+    StylePreference NVARCHAR(20) NOT NULL DEFAULT 'formal',
+    CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+    UpdatedAt DATETIME NULL
+);
+
 -- Add indexes for better performance
 CREATE INDEX IX_Snippets_Username ON Snippets(Username);
 CREATE UNIQUE INDEX IX_Snippets_Username_Shortcut ON Snippets(Username, Shortcut);
+CREATE UNIQUE INDEX IX_UserSettings_Username ON UserSettings(Username);
 ```
 
 4. (Optional) Create a test user:

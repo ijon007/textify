@@ -33,6 +33,13 @@ public partial class DashboardForm : Form
   private Label? lblEmptySnippets;
   private int? editingSnippetId;
 
+  // Style page components
+  private Label? lblStyleTitle;
+  private ClippingPanel? panelFormalCard;
+  private ClippingPanel? panelCasualCard;
+  private ClippingPanel? panelVeryCasualCard;
+  private string? selectedStylePreference;
+
   public DashboardForm(string username)
   {
     this.username = username;
@@ -778,8 +785,10 @@ public partial class DashboardForm : Form
     // Set up Snippets page with full functionality
     InitializeSnippetsPage();
     
+    // Set up Style page with full functionality
+    InitializeStylePage();
+    
     // Set up placeholder content for other pages
-    CreatePlaceholderPage(panelStylePage, "Style");
     CreatePlaceholderPage(panelSettingsPage, "Settings");
     
     // Initially hide all pages except Home
@@ -1957,5 +1966,300 @@ public partial class DashboardForm : Form
   private void RefreshSnippetsList()
   {
     LoadSnippetsEntries();
+  }
+
+  // Style Page Methods
+
+  private void InitializeStylePage()
+  {
+    panelStylePage.BackColor = Color.White;
+    panelStylePage.Dock = DockStyle.Fill;
+    panelStylePage.Padding = new Padding(40, 60, 40, 50);
+
+    // Page Title
+    lblStyleTitle = new Label();
+    lblStyleTitle.Text = "Style";
+    lblStyleTitle.Font = new Font("Segoe UI", 24F, FontStyle.Bold, GraphicsUnit.Point);
+    lblStyleTitle.ForeColor = Color.FromArgb(45, 45, 48);
+    lblStyleTitle.Location = new Point(40, 60);
+    lblStyleTitle.AutoSize = true;
+    lblStyleTitle.Name = "lblStyleTitle";
+
+    // Load saved preference
+    selectedStylePreference = databaseService?.GetUserStylePreference(username) ?? "formal";
+
+    // Create style cards
+    CreateStyleCards();
+
+    // Add controls to style page
+    panelStylePage.Controls.Add(lblStyleTitle);
+
+    // Handle resize
+    panelStylePage.Resize += PanelStylePage_Resize;
+  }
+
+  private void PanelStylePage_Resize(object? sender, EventArgs e)
+  {
+    if (panelStylePage != null)
+    {
+      UpdateCardPositions();
+    }
+  }
+
+  private void CreateStyleCards()
+  {
+    // Card dimensions
+    const int cardWidth = 280;
+    const int cardHeight = 420;
+    const int cardSpacing = 30;
+    const int cardsTop = 150;
+
+    // Calculate starting X position to center cards
+    int totalCardsWidth = (cardWidth * 3) + (cardSpacing * 2);
+    int startX = (panelStylePage.ClientSize.Width - totalCardsWidth) / 2;
+    if (startX < 40) startX = 40; // Minimum padding
+
+    // Create Formal card
+    panelFormalCard = CreateStyleCard(
+      "Formal.",
+      "Caps + Punctuation",
+      "Hey, are you free for lunch tomorrow? Let's do 12 if that works for you.",
+      Color.FromArgb(200, 180, 220), // Light purple
+      "formal",
+      new Point(startX, cardsTop),
+      cardWidth,
+      cardHeight
+    );
+
+    // Create Casual card
+    panelCasualCard = CreateStyleCard(
+      "Casual",
+      "Caps + Less punctuation",
+      "Hey are you free for lunch tomorrow? Let's do 12 if that works for you",
+      Color.FromArgb(255, 200, 220), // Light pink
+      "casual",
+      new Point(startX + cardWidth + cardSpacing, cardsTop),
+      cardWidth,
+      cardHeight
+    );
+
+    // Create Very Casual card
+    panelVeryCasualCard = CreateStyleCard(
+      "very casual",
+      "No Caps + Less punctuation",
+      "hey are you free for lunch tomorrow? let's do 12 if that works for you",
+      Color.FromArgb(128, 0, 128), // Dark purple
+      "very_casual",
+      new Point(startX + (cardWidth + cardSpacing) * 2, cardsTop),
+      cardWidth,
+      cardHeight
+    );
+
+    // Add cards to page
+    panelStylePage.Controls.Add(panelFormalCard);
+    panelStylePage.Controls.Add(panelCasualCard);
+    panelStylePage.Controls.Add(panelVeryCasualCard);
+
+    // Highlight selected card
+    UpdateCardSelection();
+  }
+
+  private ClippingPanel CreateStyleCard(string title, string subtitle, string exampleText, Color avatarColor, string styleValue, Point location, int width, int height)
+  {
+    // Create card panel
+    ClippingPanel card = new ClippingPanel();
+    card.BackColor = Color.White;
+    card.Location = location;
+    card.Size = new Size(width, height);
+    card.Name = $"panel{styleValue}Card";
+    card.Cursor = Cursors.Hand;
+    card.Tag = styleValue;
+    
+    // Apply rounded corners
+    ApplyRoundedCorners(card, 10);
+    
+    // Add border paint handler
+    card.Paint += StyleCard_Paint;
+    
+    // Add click handler
+    card.Click += StyleCard_Click;
+    card.MouseEnter += StyleCard_MouseEnter;
+    card.MouseLeave += StyleCard_MouseLeave;
+
+    // Card padding
+    const int padding = 20;
+
+    // Title label
+    Label lblTitle = new Label();
+    lblTitle.Text = title;
+    lblTitle.Font = new Font("Segoe UI", 18F, FontStyle.Bold, GraphicsUnit.Point);
+    lblTitle.ForeColor = Color.FromArgb(45, 45, 48);
+    lblTitle.BackColor = Color.White;
+    lblTitle.Location = new Point(padding, padding);
+    lblTitle.AutoSize = true;
+    lblTitle.Name = $"lbl{styleValue}Title";
+
+    // Subtitle label
+    Label lblSubtitle = new Label();
+    lblSubtitle.Text = subtitle;
+    lblSubtitle.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
+    lblSubtitle.ForeColor = Color.FromArgb(100, 100, 100);
+    lblSubtitle.BackColor = Color.White;
+    lblSubtitle.Location = new Point(padding, padding + 35);
+    lblSubtitle.AutoSize = true;
+    lblSubtitle.Name = $"lbl{styleValue}Subtitle";
+
+    // Message bubble with example text
+    Panel messageBubble = CreateMessageBubble(exampleText, avatarColor, padding, padding + 70, width - (padding * 2), height - padding - (padding + 70) - 20);
+    messageBubble.Name = $"panel{styleValue}MessageBubble";
+
+    // Add controls to card
+    card.Controls.Add(lblTitle);
+    card.Controls.Add(lblSubtitle);
+    card.Controls.Add(messageBubble);
+
+    return card;
+  }
+
+  private Panel CreateMessageBubble(string text, Color avatarColor, int x, int y, int width, int height)
+  {
+    // Create message bubble panel
+    Panel bubble = new Panel();
+    bubble.BackColor = Color.FromArgb(245, 245, 245);
+    bubble.Location = new Point(x, y);
+    bubble.Size = new Size(width, height);
+    bubble.Padding = new Padding(12, 12, 12, 40); // Extra bottom padding for avatar
+    
+    // Apply rounded corners
+    ApplyRoundedCorners(bubble, 8);
+
+    // Example text label
+    Label lblText = new Label();
+    lblText.Text = text;
+    lblText.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    lblText.ForeColor = Color.FromArgb(45, 45, 48);
+    lblText.BackColor = Color.FromArgb(245, 245, 245);
+    lblText.Location = new Point(12, 12);
+    lblText.AutoSize = false;
+    lblText.Size = new Size(width - 24 - 30, height - 24 - 30); // Account for padding and avatar space
+    lblText.TextAlign = ContentAlignment.TopLeft;
+    lblText.UseCompatibleTextRendering = false;
+
+    // Avatar circle
+    Panel avatar = CreateAvatarCircle("J", avatarColor, width - 30, height - 30, 26);
+
+    // Add controls to bubble
+    bubble.Controls.Add(lblText);
+    bubble.Controls.Add(avatar);
+
+    return bubble;
+  }
+
+  private Panel CreateAvatarCircle(string letter, Color backgroundColor, int x, int y, int diameter)
+  {
+    Panel avatar = new Panel();
+    avatar.BackColor = backgroundColor;
+    avatar.Location = new Point(x, y);
+    avatar.Size = new Size(diameter, diameter);
+    avatar.Name = $"avatar{letter}";
+
+    // Create circular region
+    System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath();
+    path.AddEllipse(0, 0, diameter, diameter);
+    avatar.Region = new System.Drawing.Region(path);
+
+    // Letter label
+    Label lblLetter = new Label();
+    lblLetter.Text = letter;
+    lblLetter.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+    lblLetter.ForeColor = Color.White;
+    lblLetter.BackColor = backgroundColor;
+    lblLetter.AutoSize = false;
+    lblLetter.Size = new Size(diameter, diameter);
+    lblLetter.TextAlign = ContentAlignment.MiddleCenter;
+    lblLetter.UseCompatibleTextRendering = false;
+
+    avatar.Controls.Add(lblLetter);
+
+    return avatar;
+  }
+
+  private void StyleCard_Paint(object? sender, PaintEventArgs e)
+  {
+    if (sender is Panel panel && panel.Tag is string styleValue)
+    {
+      Color borderColor = (selectedStylePreference == styleValue)
+        ? Color.FromArgb(128, 0, 128) // Purple for selected
+        : Color.FromArgb(200, 200, 200); // Light gray for unselected
+
+      DrawRoundedBorder(panel, e.Graphics, 10, borderColor);
+    }
+  }
+
+  private void StyleCard_Click(object? sender, EventArgs e)
+  {
+    if (sender is Panel card && card.Tag is string styleValue)
+    {
+      selectedStylePreference = styleValue;
+      
+      // Save to database
+      try
+      {
+        databaseService?.SaveUserStylePreference(username, styleValue);
+      }
+      catch (Exception ex)
+      {
+        System.Diagnostics.Debug.WriteLine($"Failed to save style preference: {ex.Message}");
+      }
+
+      // Update visual selection
+      UpdateCardSelection();
+    }
+  }
+
+  private void StyleCard_MouseEnter(object? sender, EventArgs e)
+  {
+    if (sender is Panel card)
+    {
+      card.BackColor = Color.FromArgb(250, 250, 250);
+    }
+  }
+
+  private void StyleCard_MouseLeave(object? sender, EventArgs e)
+  {
+    if (sender is Panel card)
+    {
+      card.BackColor = Color.White;
+    }
+  }
+
+  private void UpdateCardSelection()
+  {
+    // Refresh all cards to update border colors
+    if (panelFormalCard != null)
+      panelFormalCard.Invalidate();
+    if (panelCasualCard != null)
+      panelCasualCard.Invalidate();
+    if (panelVeryCasualCard != null)
+      panelVeryCasualCard.Invalidate();
+  }
+
+  private void UpdateCardPositions()
+  {
+    if (panelFormalCard == null || panelCasualCard == null || panelVeryCasualCard == null)
+      return;
+
+    const int cardWidth = 280;
+    const int cardSpacing = 30;
+    const int cardsTop = 150;
+
+    // Calculate starting X position to center cards
+    int totalCardsWidth = (cardWidth * 3) + (cardSpacing * 2);
+    int startX = (panelStylePage.ClientSize.Width - totalCardsWidth) / 2;
+    if (startX < 40) startX = 40; // Minimum padding
+
+    panelFormalCard.Location = new Point(startX, cardsTop);
+    panelCasualCard.Location = new Point(startX + cardWidth + cardSpacing, cardsTop);
+    panelVeryCasualCard.Location = new Point(startX + (cardWidth + cardSpacing) * 2, cardsTop);
   }
 }
