@@ -287,4 +287,205 @@ public class DatabaseService
       return 0;
     }
   }
+
+  public int AddDictionaryEntry(string username, string word)
+  {
+    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(word))
+      throw new ArgumentException("Username and word cannot be empty.");
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        
+        // Check for duplicate word for this user
+        string checkQuery = "SELECT COUNT(*) FROM Dictionary WHERE Username = @username AND Word = @word";
+        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
+        {
+          checkCommand.Parameters.AddWithValue("@username", username);
+          checkCommand.Parameters.AddWithValue("@word", word.Trim());
+          
+          int count = (int)checkCommand.ExecuteScalar();
+          if (count > 0)
+          {
+            throw new InvalidOperationException("This word already exists in your dictionary.");
+          }
+        }
+        
+        // Insert new entry
+        string insertQuery = "INSERT INTO Dictionary (Username, Word, CreatedAt) OUTPUT INSERTED.Id VALUES (@username, @word, @createdAt)";
+        
+        using (SqlCommand command = new SqlCommand(insertQuery, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          command.Parameters.AddWithValue("@word", word.Trim());
+          command.Parameters.AddWithValue("@createdAt", DateTime.Now);
+          
+          int newId = (int)command.ExecuteScalar();
+          return newId;
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to add dictionary entry: {ex.Message}");
+      throw;
+    }
+  }
+
+  public List<(int id, string word, DateTime createdAt)> GetDictionaryEntries(string username)
+  {
+    var entries = new List<(int id, string word, DateTime createdAt)>();
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        
+        string query = @"
+          SELECT Id, Word, CreatedAt 
+          FROM Dictionary 
+          WHERE Username = @username 
+          ORDER BY CreatedAt DESC";
+        
+        using (SqlCommand command = new SqlCommand(query, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          
+          using (SqlDataReader reader = command.ExecuteReader())
+          {
+            while (reader.Read())
+            {
+              int id = reader.GetInt32(0);
+              string word = reader.GetString(1);
+              DateTime createdAt = reader.GetDateTime(2);
+              
+              entries.Add((id, word, createdAt));
+            }
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to load dictionary entries: {ex.Message}");
+    }
+
+    return entries;
+  }
+
+  public void UpdateDictionaryEntry(int id, string username, string word)
+  {
+    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(word))
+      throw new ArgumentException("Username and word cannot be empty.");
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        
+        // Verify entry belongs to user
+        string verifyQuery = "SELECT COUNT(*) FROM Dictionary WHERE Id = @id AND Username = @username";
+        using (SqlCommand verifyCommand = new SqlCommand(verifyQuery, connection))
+        {
+          verifyCommand.Parameters.AddWithValue("@id", id);
+          verifyCommand.Parameters.AddWithValue("@username", username);
+          
+          int count = (int)verifyCommand.ExecuteScalar();
+          if (count == 0)
+          {
+            throw new InvalidOperationException("Dictionary entry not found or does not belong to user.");
+          }
+        }
+        
+        // Check for duplicate word (excluding current entry)
+        string checkQuery = "SELECT COUNT(*) FROM Dictionary WHERE Username = @username AND Word = @word AND Id != @id";
+        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
+        {
+          checkCommand.Parameters.AddWithValue("@username", username);
+          checkCommand.Parameters.AddWithValue("@word", word.Trim());
+          checkCommand.Parameters.AddWithValue("@id", id);
+          
+          int count = (int)checkCommand.ExecuteScalar();
+          if (count > 0)
+          {
+            throw new InvalidOperationException("This word already exists in your dictionary.");
+          }
+        }
+        
+        // Update entry
+        string updateQuery = "UPDATE Dictionary SET Word = @word, UpdatedAt = @updatedAt WHERE Id = @id AND Username = @username";
+        
+        using (SqlCommand command = new SqlCommand(updateQuery, connection))
+        {
+          command.Parameters.AddWithValue("@id", id);
+          command.Parameters.AddWithValue("@username", username);
+          command.Parameters.AddWithValue("@word", word.Trim());
+          command.Parameters.AddWithValue("@updatedAt", DateTime.Now);
+          
+          int rowsAffected = command.ExecuteNonQuery();
+          if (rowsAffected == 0)
+          {
+            throw new InvalidOperationException("Failed to update dictionary entry.");
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to update dictionary entry: {ex.Message}");
+      throw;
+    }
+  }
+
+  public void DeleteDictionaryEntry(int id, string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      throw new ArgumentException("Username cannot be empty.");
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        
+        // Verify entry belongs to user
+        string verifyQuery = "SELECT COUNT(*) FROM Dictionary WHERE Id = @id AND Username = @username";
+        using (SqlCommand verifyCommand = new SqlCommand(verifyQuery, connection))
+        {
+          verifyCommand.Parameters.AddWithValue("@id", id);
+          verifyCommand.Parameters.AddWithValue("@username", username);
+          
+          int count = (int)verifyCommand.ExecuteScalar();
+          if (count == 0)
+          {
+            throw new InvalidOperationException("Dictionary entry not found or does not belong to user.");
+          }
+        }
+        
+        // Delete entry
+        string deleteQuery = "DELETE FROM Dictionary WHERE Id = @id AND Username = @username";
+        
+        using (SqlCommand command = new SqlCommand(deleteQuery, connection))
+        {
+          command.Parameters.AddWithValue("@id", id);
+          command.Parameters.AddWithValue("@username", username);
+          
+          int rowsAffected = command.ExecuteNonQuery();
+          if (rowsAffected == 0)
+          {
+            throw new InvalidOperationException("Failed to delete dictionary entry.");
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to delete dictionary entry: {ex.Message}");
+      throw;
+    }
+  }
 }
