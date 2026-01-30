@@ -13,6 +13,8 @@ public partial class SpeechOverlayForm : Form
   private System.Windows.Forms.Timer? dotAnimationTimer;
   private int dotCount = 0;
   private int[] waveHeights = new int[4] { 3, 6, 4, 5 };
+  private string overlayPosition = "bottom_center";
+  private int overlayOpacity = 100;
 
   public SpeechOverlayForm()
   {
@@ -34,18 +36,63 @@ public partial class SpeechOverlayForm : Form
     this.Region = new Region(path);
   }
 
+  public void SetOverlayPosition(string position)
+  {
+    overlayPosition = position;
+    UpdateOverlayPosition();
+  }
+
+  public void SetOverlayOpacity(int opacity)
+  {
+    overlayOpacity = Math.Max(0, Math.Min(100, opacity));
+    this.Opacity = overlayOpacity / 100.0;
+  }
+
   private void SetupOverlay()
   {
-    // Position at bottom-center of screen
+    UpdateOverlayPosition();
+    SetOverlayOpacity(overlayOpacity);
+    SetState(OverlayState.Idle);
+  }
+
+  private void UpdateOverlayPosition()
+  {
     Screen? primaryScreen = Screen.PrimaryScreen;
-    if (primaryScreen != null)
+    if (primaryScreen == null) return;
+
+    int x = 0, y = 0;
+    const int margin = 20;
+
+    switch (overlayPosition)
     {
-      int x = (primaryScreen.WorkingArea.Width - this.Width) / 2;
-      int y = primaryScreen.WorkingArea.Bottom - this.Height - 20;
-      this.Location = new Point(x, y);
+      case "top_center":
+        x = (primaryScreen.WorkingArea.Width - this.Width) / 2;
+        y = primaryScreen.WorkingArea.Top + margin;
+        break;
+      case "top_left":
+        x = primaryScreen.WorkingArea.Left + margin;
+        y = primaryScreen.WorkingArea.Top + margin;
+        break;
+      case "top_right":
+        x = primaryScreen.WorkingArea.Right - this.Width - margin;
+        y = primaryScreen.WorkingArea.Top + margin;
+        break;
+      case "bottom_left":
+        x = primaryScreen.WorkingArea.Left + margin;
+        y = primaryScreen.WorkingArea.Bottom - this.Height - margin;
+        break;
+      case "bottom_right":
+        x = primaryScreen.WorkingArea.Right - this.Width - margin;
+        y = primaryScreen.WorkingArea.Bottom - this.Height - margin;
+        break;
+      case "bottom_center":
+      default:
+        x = (primaryScreen.WorkingArea.Width - this.Width) / 2;
+        y = primaryScreen.WorkingArea.Bottom - this.Height - margin;
+        break;
     }
 
-    SetState(OverlayState.Idle);
+    this.Location = new Point(x, y);
   }
 
   public void SetState(OverlayState state)

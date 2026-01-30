@@ -11,6 +11,7 @@ public class SpeechRecognitionService : IDisposable
   private WaveInEvent? waveIn;
   private bool isListening = false;
   private readonly object lockObject = new object();
+  private int? selectedDeviceNumber = null;
 
   public event EventHandler<string>? SpeechRecognized;
   public event EventHandler<string>? SpeechPartialResult; // For real-time display only
@@ -39,6 +40,29 @@ public class SpeechRecognitionService : IDisposable
   }
 
   public bool IsModelLoaded => voskModel != null && recognizer != null;
+
+  public static List<(int deviceNumber, string deviceName)> GetAvailableMicrophones()
+  {
+    var devices = new List<(int, string)>();
+    try
+    {
+      for (int i = 0; i < WaveInEvent.DeviceCount; i++)
+      {
+        var capabilities = WaveInEvent.GetCapabilities(i);
+        devices.Add((i, capabilities.ProductName));
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to get microphone devices: {ex.Message}");
+    }
+    return devices;
+  }
+
+  public void SetMicrophoneDevice(int? deviceNumber)
+  {
+    selectedDeviceNumber = deviceNumber;
+  }
 
   private void InitializeVoskModel()
   {
@@ -69,6 +93,13 @@ public class SpeechRecognitionService : IDisposable
       {
         // Initialize NAudio for microphone capture
         waveIn = new WaveInEvent();
+        
+        // Set device number if specified
+        if (selectedDeviceNumber.HasValue && selectedDeviceNumber.Value >= 0 && selectedDeviceNumber.Value < WaveInEvent.DeviceCount)
+        {
+          waveIn.DeviceNumber = selectedDeviceNumber.Value;
+        }
+        
         waveIn.WaveFormat = new WaveFormat(16000, 1); // 16kHz, Mono, 16-bit
         waveIn.DataAvailable += WaveIn_DataAvailable;
         waveIn.RecordingStopped += WaveIn_RecordingStopped;

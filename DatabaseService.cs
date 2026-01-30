@@ -972,4 +972,552 @@ public class DatabaseService
       throw;
     }
   }
+
+  // Schema migration helper - ensures new columns exist
+  private void EnsureSettingsColumnsExist()
+  {
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        
+        string[] columnsToAdd = new[]
+        {
+          "MicrophoneDeviceId", "NVARCHAR(100)",
+          "OverlayPosition", "NVARCHAR(50)",
+          "OverlayOpacity", "INT",
+          "ShowOverlay", "BIT",
+          "StartWithWindows", "BIT",
+          "StartMinimized", "BIT",
+          "MinimizeToTray", "BIT",
+          "RecognitionSensitivity", "NVARCHAR(20)",
+          "AutoInjectDelay", "INT"
+        };
+
+        // Check existing columns
+        string checkColumnsQuery = @"
+          SELECT COLUMN_NAME 
+          FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_NAME = 'UserSettings'";
+        
+        var existingColumns = new HashSet<string>();
+        using (SqlCommand checkCmd = new SqlCommand(checkColumnsQuery, connection))
+        {
+          using (SqlDataReader reader = checkCmd.ExecuteReader())
+          {
+            while (reader.Read())
+            {
+              existingColumns.Add(reader.GetString(0));
+            }
+          }
+        }
+
+        // Add missing columns
+        for (int i = 0; i < columnsToAdd.Length; i += 2)
+        {
+          string columnName = columnsToAdd[i];
+          string columnType = columnsToAdd[i + 1];
+          
+          if (!existingColumns.Contains(columnName))
+          {
+            string defaultValue = "";
+            if (columnType == "BIT")
+            {
+              if (columnName == "ShowOverlay")
+                defaultValue = " DEFAULT 1";
+              else
+                defaultValue = " DEFAULT 0";
+            }
+            else if (columnType == "INT")
+            {
+              if (columnName == "OverlayOpacity")
+                defaultValue = " DEFAULT 100";
+              else if (columnName == "AutoInjectDelay")
+                defaultValue = " DEFAULT 0";
+            }
+            else if (columnType == "NVARCHAR(50)" && columnName == "OverlayPosition")
+            {
+              defaultValue = " DEFAULT 'bottom_center'";
+            }
+            else if (columnType == "NVARCHAR(20)" && columnName == "RecognitionSensitivity")
+            {
+              defaultValue = " DEFAULT 'medium'";
+            }
+
+            string alterQuery = $"ALTER TABLE UserSettings ADD {columnName} {columnType}{defaultValue}";
+            using (SqlCommand alterCmd = new SqlCommand(alterQuery, connection))
+            {
+              alterCmd.ExecuteNonQuery();
+            }
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to ensure settings columns exist: {ex.Message}");
+      // Don't throw - allow app to continue with defaults
+    }
+  }
+
+  // Microphone Settings
+  public string? GetUserMicrophonePreference(string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      return null;
+
+    try
+    {
+      EnsureSettingsColumnsExist();
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string query = "SELECT MicrophoneDeviceId FROM UserSettings WHERE Username = @username";
+        using (SqlCommand command = new SqlCommand(query, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          object? result = command.ExecuteScalar();
+          if (result != null && result != DBNull.Value)
+            return result.ToString();
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to get microphone preference: {ex.Message}");
+    }
+    return null;
+  }
+
+  public void SaveUserMicrophonePreference(string username, string? deviceId)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      throw new ArgumentException("Username cannot be empty.");
+
+    try
+    {
+      EnsureSettingsColumnsExist();
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
+        bool exists = false;
+        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
+        {
+          checkCommand.Parameters.AddWithValue("@username", username);
+          exists = (int)checkCommand.ExecuteScalar() > 0;
+        }
+
+        if (exists)
+        {
+          string updateQuery = "UPDATE UserSettings SET MicrophoneDeviceId = @deviceId, UpdatedAt = @updatedAt WHERE Username = @username";
+          using (SqlCommand command = new SqlCommand(updateQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            if (string.IsNullOrEmpty(deviceId))
+              command.Parameters.AddWithValue("@deviceId", DBNull.Value);
+            else
+              command.Parameters.AddWithValue("@deviceId", deviceId);
+            command.Parameters.AddWithValue("@updatedAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+        else
+        {
+          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, MicrophoneDeviceId, CreatedAt) VALUES (@username, @style, @deviceId, @createdAt)";
+          using (SqlCommand command = new SqlCommand(insertQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@style", "formal");
+            if (string.IsNullOrEmpty(deviceId))
+              command.Parameters.AddWithValue("@deviceId", DBNull.Value);
+            else
+              command.Parameters.AddWithValue("@deviceId", deviceId);
+            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to save microphone preference: {ex.Message}");
+      throw;
+    }
+  }
+
+  // Overlay Settings
+  public (string position, int opacity, bool showOverlay) GetUserOverlayPreferences(string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      return ("bottom_center", 100, true);
+
+    try
+    {
+      EnsureSettingsColumnsExist();
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string query = "SELECT OverlayPosition, OverlayOpacity, ShowOverlay FROM UserSettings WHERE Username = @username";
+        using (SqlCommand command = new SqlCommand(query, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          using (SqlDataReader reader = command.ExecuteReader())
+          {
+            if (reader.Read())
+            {
+              string position = reader.IsDBNull(0) ? "bottom_center" : reader.GetString(0);
+              int opacity = reader.IsDBNull(1) ? 100 : reader.GetInt32(1);
+              bool showOverlay = reader.IsDBNull(2) ? true : reader.GetBoolean(2);
+              return (position, opacity, showOverlay);
+            }
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to get overlay preferences: {ex.Message}");
+    }
+    return ("bottom_center", 100, true);
+  }
+
+  public void SaveUserOverlayPreferences(string username, string position, int opacity, bool showOverlay)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      throw new ArgumentException("Username cannot be empty.");
+
+    try
+    {
+      EnsureSettingsColumnsExist();
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
+        bool exists = false;
+        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
+        {
+          checkCommand.Parameters.AddWithValue("@username", username);
+          exists = (int)checkCommand.ExecuteScalar() > 0;
+        }
+
+        if (exists)
+        {
+          string updateQuery = "UPDATE UserSettings SET OverlayPosition = @position, OverlayOpacity = @opacity, ShowOverlay = @showOverlay, UpdatedAt = @updatedAt WHERE Username = @username";
+          using (SqlCommand command = new SqlCommand(updateQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@position", position);
+            command.Parameters.AddWithValue("@opacity", opacity);
+            command.Parameters.AddWithValue("@showOverlay", showOverlay);
+            command.Parameters.AddWithValue("@updatedAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+        else
+        {
+          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, OverlayPosition, OverlayOpacity, ShowOverlay, CreatedAt) VALUES (@username, @style, @position, @opacity, @showOverlay, @createdAt)";
+          using (SqlCommand command = new SqlCommand(insertQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@style", "formal");
+            command.Parameters.AddWithValue("@position", position);
+            command.Parameters.AddWithValue("@opacity", opacity);
+            command.Parameters.AddWithValue("@showOverlay", showOverlay);
+            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to save overlay preferences: {ex.Message}");
+      throw;
+    }
+  }
+
+  // Application Behavior Settings
+  public (bool startWithWindows, bool startMinimized, bool minimizeToTray) GetUserApplicationPreferences(string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      return (false, false, false);
+
+    try
+    {
+      EnsureSettingsColumnsExist();
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string query = "SELECT StartWithWindows, StartMinimized, MinimizeToTray FROM UserSettings WHERE Username = @username";
+        using (SqlCommand command = new SqlCommand(query, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          using (SqlDataReader reader = command.ExecuteReader())
+          {
+            if (reader.Read())
+            {
+              bool startWithWindows = !reader.IsDBNull(0) && reader.GetBoolean(0);
+              bool startMinimized = !reader.IsDBNull(1) && reader.GetBoolean(1);
+              bool minimizeToTray = !reader.IsDBNull(2) && reader.GetBoolean(2);
+              return (startWithWindows, startMinimized, minimizeToTray);
+            }
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to get application preferences: {ex.Message}");
+    }
+    return (false, false, false);
+  }
+
+  public void SaveUserApplicationPreferences(string username, bool startWithWindows, bool startMinimized, bool minimizeToTray)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      throw new ArgumentException("Username cannot be empty.");
+
+    try
+    {
+      EnsureSettingsColumnsExist();
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
+        bool exists = false;
+        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
+        {
+          checkCommand.Parameters.AddWithValue("@username", username);
+          exists = (int)checkCommand.ExecuteScalar() > 0;
+        }
+
+        if (exists)
+        {
+          string updateQuery = "UPDATE UserSettings SET StartWithWindows = @startWithWindows, StartMinimized = @startMinimized, MinimizeToTray = @minimizeToTray, UpdatedAt = @updatedAt WHERE Username = @username";
+          using (SqlCommand command = new SqlCommand(updateQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@startWithWindows", startWithWindows);
+            command.Parameters.AddWithValue("@startMinimized", startMinimized);
+            command.Parameters.AddWithValue("@minimizeToTray", minimizeToTray);
+            command.Parameters.AddWithValue("@updatedAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+        else
+        {
+          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, StartWithWindows, StartMinimized, MinimizeToTray, CreatedAt) VALUES (@username, @style, @startWithWindows, @startMinimized, @minimizeToTray, @createdAt)";
+          using (SqlCommand command = new SqlCommand(insertQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@style", "formal");
+            command.Parameters.AddWithValue("@startWithWindows", startWithWindows);
+            command.Parameters.AddWithValue("@startMinimized", startMinimized);
+            command.Parameters.AddWithValue("@minimizeToTray", minimizeToTray);
+            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to save application preferences: {ex.Message}");
+      throw;
+    }
+  }
+
+  // Speech Recognition Settings
+  public (string sensitivity, int autoInjectDelay) GetUserRecognitionPreferences(string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      return ("medium", 0);
+
+    try
+    {
+      EnsureSettingsColumnsExist();
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string query = "SELECT RecognitionSensitivity, AutoInjectDelay FROM UserSettings WHERE Username = @username";
+        using (SqlCommand command = new SqlCommand(query, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          using (SqlDataReader reader = command.ExecuteReader())
+          {
+            if (reader.Read())
+            {
+              string sensitivity = reader.IsDBNull(0) ? "medium" : reader.GetString(0);
+              int delay = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+              return (sensitivity, delay);
+            }
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to get recognition preferences: {ex.Message}");
+    }
+    return ("medium", 0);
+  }
+
+  public void SaveUserRecognitionPreferences(string username, string sensitivity, int autoInjectDelay)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      throw new ArgumentException("Username cannot be empty.");
+
+    if (sensitivity != "low" && sensitivity != "medium" && sensitivity != "high")
+      throw new ArgumentException("Sensitivity must be 'low', 'medium', or 'high'.");
+
+    try
+    {
+      EnsureSettingsColumnsExist();
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
+        bool exists = false;
+        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
+        {
+          checkCommand.Parameters.AddWithValue("@username", username);
+          exists = (int)checkCommand.ExecuteScalar() > 0;
+        }
+
+        if (exists)
+        {
+          string updateQuery = "UPDATE UserSettings SET RecognitionSensitivity = @sensitivity, AutoInjectDelay = @delay, UpdatedAt = @updatedAt WHERE Username = @username";
+          using (SqlCommand command = new SqlCommand(updateQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@sensitivity", sensitivity);
+            command.Parameters.AddWithValue("@delay", autoInjectDelay);
+            command.Parameters.AddWithValue("@updatedAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+        else
+        {
+          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, RecognitionSensitivity, AutoInjectDelay, CreatedAt) VALUES (@username, @style, @sensitivity, @delay, @createdAt)";
+          using (SqlCommand command = new SqlCommand(insertQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@style", "formal");
+            command.Parameters.AddWithValue("@sensitivity", sensitivity);
+            command.Parameters.AddWithValue("@delay", autoInjectDelay);
+            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to save recognition preferences: {ex.Message}");
+      throw;
+    }
+  }
+
+  // Data Management Methods
+  public void ClearAllSpeechHistory(string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      throw new ArgumentException("Username cannot be empty.");
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string deleteQuery = "DELETE FROM Speeches WHERE Username = @username";
+        using (SqlCommand command = new SqlCommand(deleteQuery, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          command.ExecuteNonQuery();
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to clear speech history: {ex.Message}");
+      throw;
+    }
+  }
+
+  public void ClearAllDictionary(string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      throw new ArgumentException("Username cannot be empty.");
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string deleteQuery = "DELETE FROM Dictionary WHERE Username = @username";
+        using (SqlCommand command = new SqlCommand(deleteQuery, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          command.ExecuteNonQuery();
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to clear dictionary: {ex.Message}");
+      throw;
+    }
+  }
+
+  public void ClearAllSnippets(string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      throw new ArgumentException("Username cannot be empty.");
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        string deleteQuery = "DELETE FROM Snippets WHERE Username = @username";
+        using (SqlCommand command = new SqlCommand(deleteQuery, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          command.ExecuteNonQuery();
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to clear snippets: {ex.Message}");
+      throw;
+    }
+  }
+
+  public string ExportUserData(string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      throw new ArgumentException("Username cannot be empty.");
+
+    try
+    {
+      var exportData = new
+      {
+        username = username,
+        exportDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+        speeches = GetSpeeches(username, int.MaxValue),
+        dictionary = GetDictionaryEntries(username),
+        snippets = GetSnippets(username)
+      };
+
+      return System.Text.Json.JsonSerializer.Serialize(exportData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to export user data: {ex.Message}");
+      throw;
+    }
+  }
 }

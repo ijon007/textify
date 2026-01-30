@@ -6,6 +6,11 @@ namespace WinFormTest;
 
 public partial class DashboardForm : Form
 {
+  [DllImport("user32.dll")]
+  private static extern int ShowScrollBar(IntPtr hWnd, int wBar, bool bShow);
+
+  private const int SB_VERT = 1;
+
   private string username;
   private SpeechRecognitionService? speechService;
   private GlobalHotkeyManager? hotkeyManager;
@@ -47,6 +52,40 @@ public partial class DashboardForm : Form
   private Label? lblCurrentHotkeyValue;
   private Button? btnChangeHotkey;
   private Label? lblHotkeyDescription;
+  
+  // Microphone Settings
+  private Label? lblMicrophoneSectionTitle;
+  private Label? lblMicrophoneDevice;
+  private ComboBox? cmbMicrophoneDevice;
+  
+  // Overlay Settings
+  private Label? lblOverlaySectionTitle;
+  private Label? lblOverlayPosition;
+  private ComboBox? cmbOverlayPosition;
+  private Label? lblOverlayOpacity;
+  private TrackBar? trackOverlayOpacity;
+  private Label? lblOverlayOpacityValue;
+  private CheckBox? chkShowOverlay;
+  
+  // Application Behavior
+  private Label? lblApplicationSectionTitle;
+  private CheckBox? chkStartWithWindows;
+  private CheckBox? chkStartMinimized;
+  private CheckBox? chkMinimizeToTray;
+  
+  // Speech Recognition
+  private Label? lblRecognitionSectionTitle;
+  private Label? lblRecognitionSensitivity;
+  private ComboBox? cmbRecognitionSensitivity;
+  private Label? lblAutoInjectDelay;
+  private NumericUpDown? numAutoInjectDelay;
+  
+  // Data Management
+  private Label? lblDataSectionTitle;
+  private Button? btnClearSpeechHistory;
+  private Button? btnClearDictionary;
+  private Button? btnClearSnippets;
+  private Button? btnExportData;
 
   public DashboardForm(string username)
   {
@@ -108,8 +147,9 @@ public partial class DashboardForm : Form
 
   private void PanelPage_Paint(object? sender, PaintEventArgs e)
   {
-    if (sender is Panel panel)
+    if (sender is Panel panel && panel != panelSettingsPage)
     {
+      // Settings page has its own Paint handler, so skip it here
       DrawRoundedBorder(panel, e.Graphics, 10, Color.FromArgb(200, 200, 200));
     }
   }
@@ -163,13 +203,31 @@ public partial class DashboardForm : Form
   private void SetupRoundedCornersForPages()
   {
     // Apply rounded corners to all page panels
-    Panel[] pagePanels = { panelHomePage, panelDictionaryPage, panelSnippetsPage, panelStylePage, panelSettingsPage };
+    Panel[] pagePanels = { panelHomePage, panelDictionaryPage, panelSnippetsPage, panelStylePage };
     
     foreach (Panel panel in pagePanels)
     {
       panel.Resize += PanelPage_Resize;
       panel.Paint += PanelPage_Paint;
       ApplyRoundedCorners(panel, 10);
+    }
+    
+    // Settings page gets its own Paint handler (only outer border, no internal horizontal lines)
+    panelSettingsPage.Resize += PanelPage_Resize;
+    panelSettingsPage.Paint += PanelSettingsPage_Paint;
+    ApplyRoundedCorners(panelSettingsPage, 10);
+  }
+  
+
+  private void PanelSettingsPage_Paint(object? sender, PaintEventArgs e)
+  {
+    if (sender is Panel panel && panel == panelSettingsPage)
+    {
+      // Draw outer border only - same as other pages, no internal horizontal lines
+      DrawRoundedBorder(panel, e.Graphics, 10, Color.FromArgb(200, 200, 200));
+      
+      // Ensure scrollbar is hidden after painting
+      HideScrollbar(panel);
     }
   }
 
@@ -217,10 +275,29 @@ public partial class DashboardForm : Form
       // Load and apply saved hotkey preference
       LoadAndApplyHotkeyPreference();
       
+      // Load and apply microphone preference
+      LoadAndApplyMicrophonePreference();
+      
       hotkeyManager.InstallKeyboardHook();
 
       // Initialize overlay form
       overlayForm = new SpeechOverlayForm();
+      
+      // Load and apply overlay settings
+      if (databaseService != null)
+      {
+        try
+        {
+          var (position, opacity, showOverlay) = databaseService.GetUserOverlayPreferences(username);
+          overlayForm.SetOverlayPosition(position);
+          overlayForm.SetOverlayOpacity(opacity);
+        }
+        catch
+        {
+          // Use defaults if loading fails
+        }
+      }
+      
       overlayForm.Hide();
 
       // Load model asynchronously
@@ -278,6 +355,25 @@ public partial class DashboardForm : Form
     }
   }
 
+  private void LoadAndApplyMicrophonePreference()
+  {
+    if (databaseService == null || speechService == null)
+      return;
+
+    try
+    {
+      string? deviceId = databaseService.GetUserMicrophonePreference(username);
+      if (!string.IsNullOrEmpty(deviceId) && int.TryParse(deviceId, out int deviceNumber))
+      {
+        speechService.SetMicrophoneDevice(deviceNumber);
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to load microphone preference: {ex.Message}");
+    }
+  }
+
   protected override void WndProc(ref Message m)
   {
     // Handle hotkey messages
@@ -320,8 +416,27 @@ public partial class DashboardForm : Form
       textInjectionService.SaveForegroundWindow(activeWindow);
       
       speechService.StartListening();
-      overlayForm.SetState(SpeechOverlayForm.OverlayState.Listening);
-      overlayForm.Show();
+      
+      // Check if overlay should be shown
+      bool showOverlay = true;
+      if (databaseService != null)
+      {
+        try
+        {
+          var (_, _, show) = databaseService.GetUserOverlayPreferences(username);
+          showOverlay = show;
+        }
+        catch
+        {
+          // Use default if loading fails
+        }
+      }
+      
+      if (showOverlay)
+      {
+        overlayForm.SetState(SpeechOverlayForm.OverlayState.Listening);
+        overlayForm.Show();
+      }
     }
     catch (Exception ex)
     {
@@ -339,10 +454,23 @@ public partial class DashboardForm : Form
     {
       speechService.StopListening();
       
-      // Wait a short time to allow pending recognition events to complete
-      // Recognition events can fire asynchronously after StopListening()
-      // Increased delay to 1000ms to give more time for recognition processing
-      await Task.Delay(1000);
+      // Get auto-inject delay setting
+      int autoInjectDelay = 1000; // Default delay
+      if (databaseService != null)
+      {
+        try
+        {
+          var (_, delay) = databaseService.GetUserRecognitionPreferences(username);
+          autoInjectDelay = delay;
+        }
+        catch
+        {
+          // Use default if loading fails
+        }
+      }
+      
+      // Wait for recognition processing + user-defined delay
+      await Task.Delay(1000 + autoInjectDelay);
       
       // Calculate duration if we have a start time
       int? duration = null;
@@ -2337,43 +2465,55 @@ public partial class DashboardForm : Form
     panelSettingsPage.BackColor = Color.White;
     panelSettingsPage.Dock = DockStyle.Fill;
     panelSettingsPage.Padding = new Padding(40, 60, 40, 50);
+    panelSettingsPage.AutoScroll = true;
+    panelSettingsPage.VerticalScroll.Visible = false;
+    panelSettingsPage.HorizontalScroll.Visible = false;
+    panelSettingsPage.BorderStyle = BorderStyle.None; // Ensure no default border rendering
+    
+    // Hide scrollbar using Windows API
+    HideScrollbar(panelSettingsPage);
+
+    int currentY = 60;
+    const int sectionSpacing = 50;
+    const int itemSpacing = 30;
 
     // Page Title
     lblSettingsTitle = new Label();
     lblSettingsTitle.Text = "Settings";
     lblSettingsTitle.Font = new Font("Segoe UI", 24F, FontStyle.Bold, GraphicsUnit.Point);
     lblSettingsTitle.ForeColor = Color.FromArgb(45, 45, 48);
-    lblSettingsTitle.Location = new Point(40, 60);
+    lblSettingsTitle.Location = new Point(40, currentY);
     lblSettingsTitle.AutoSize = true;
     lblSettingsTitle.Name = "lblSettingsTitle";
+    panelSettingsPage.Controls.Add(lblSettingsTitle);
+    currentY += 70;
 
-    // Hotkey Section Title
+    // ===== Push-to-Talk Shortcut Section =====
     lblHotkeySectionTitle = new Label();
     lblHotkeySectionTitle.Text = "Push-to-Talk Shortcut";
     lblHotkeySectionTitle.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
     lblHotkeySectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
-    lblHotkeySectionTitle.Location = new Point(40, 130);
+    lblHotkeySectionTitle.Location = new Point(40, currentY);
     lblHotkeySectionTitle.AutoSize = true;
-    lblHotkeySectionTitle.Name = "lblHotkeySectionTitle";
+    panelSettingsPage.Controls.Add(lblHotkeySectionTitle);
+    currentY += 40;
 
-    // Current Hotkey Label
     lblCurrentHotkey = new Label();
     lblCurrentHotkey.Text = "Current shortcut:";
     lblCurrentHotkey.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
     lblCurrentHotkey.ForeColor = Color.FromArgb(100, 100, 100);
-    lblCurrentHotkey.Location = new Point(40, 170);
+    lblCurrentHotkey.Location = new Point(40, currentY);
     lblCurrentHotkey.AutoSize = true;
-    lblCurrentHotkey.Name = "lblCurrentHotkey";
+    panelSettingsPage.Controls.Add(lblCurrentHotkey);
 
-    // Current Hotkey Value
     lblCurrentHotkeyValue = new Label();
     lblCurrentHotkeyValue.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
     lblCurrentHotkeyValue.ForeColor = Color.FromArgb(45, 45, 48);
-    lblCurrentHotkeyValue.Location = new Point(180, 170);
+    lblCurrentHotkeyValue.Location = new Point(180, currentY);
     lblCurrentHotkeyValue.AutoSize = true;
-    lblCurrentHotkeyValue.Name = "lblCurrentHotkeyValue";
+    panelSettingsPage.Controls.Add(lblCurrentHotkeyValue);
+    currentY += itemSpacing;
 
-    // Change Hotkey Button
     btnChangeHotkey = new Button();
     btnChangeHotkey.Text = "Change shortcut";
     btnChangeHotkey.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
@@ -2383,39 +2523,309 @@ public partial class DashboardForm : Form
     btnChangeHotkey.ForeColor = Color.White;
     btnChangeHotkey.Cursor = Cursors.Hand;
     btnChangeHotkey.Size = new Size(140, 35);
-    btnChangeHotkey.Location = new Point(40, 210);
-    btnChangeHotkey.Name = "btnChangeHotkey";
+    btnChangeHotkey.Location = new Point(40, currentY);
     btnChangeHotkey.Click += BtnChangeHotkey_Click;
     btnChangeHotkey.MouseEnter += BtnChangeHotkey_MouseEnter;
     btnChangeHotkey.MouseLeave += BtnChangeHotkey_MouseLeave;
+    panelSettingsPage.Controls.Add(btnChangeHotkey);
+    currentY += 50;
 
-    // Description Label
     lblHotkeyDescription = new Label();
     lblHotkeyDescription.Text = "Hold the shortcut keys to start dictating. Release to stop and inject text.";
     lblHotkeyDescription.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
     lblHotkeyDescription.ForeColor = Color.FromArgb(100, 100, 100);
-    lblHotkeyDescription.Location = new Point(40, 260);
+    lblHotkeyDescription.Location = new Point(40, currentY);
     lblHotkeyDescription.AutoSize = true;
-    lblHotkeyDescription.Name = "lblHotkeyDescription";
     lblHotkeyDescription.MaximumSize = new Size(600, 0);
-
-    // Add controls to settings page
-    panelSettingsPage.Controls.Add(lblSettingsTitle);
-    panelSettingsPage.Controls.Add(lblHotkeySectionTitle);
-    panelSettingsPage.Controls.Add(lblCurrentHotkey);
-    panelSettingsPage.Controls.Add(lblCurrentHotkeyValue);
-    panelSettingsPage.Controls.Add(btnChangeHotkey);
     panelSettingsPage.Controls.Add(lblHotkeyDescription);
+    currentY += sectionSpacing;
 
-    // Load and display current hotkey
-    LoadAndDisplayHotkey();
+    // ===== Microphone Settings Section =====
+    lblMicrophoneSectionTitle = new Label();
+    lblMicrophoneSectionTitle.Text = "Microphone Settings";
+    lblMicrophoneSectionTitle.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+    lblMicrophoneSectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
+    lblMicrophoneSectionTitle.Location = new Point(40, currentY);
+    lblMicrophoneSectionTitle.AutoSize = true;
+    panelSettingsPage.Controls.Add(lblMicrophoneSectionTitle);
+    currentY += 40;
+
+    lblMicrophoneDevice = new Label();
+    lblMicrophoneDevice.Text = "Microphone:";
+    lblMicrophoneDevice.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    lblMicrophoneDevice.ForeColor = Color.FromArgb(100, 100, 100);
+    lblMicrophoneDevice.Location = new Point(40, currentY);
+    lblMicrophoneDevice.AutoSize = true;
+    panelSettingsPage.Controls.Add(lblMicrophoneDevice);
+
+    cmbMicrophoneDevice = new ComboBox();
+    cmbMicrophoneDevice.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    cmbMicrophoneDevice.DropDownStyle = ComboBoxStyle.DropDownList;
+    cmbMicrophoneDevice.Size = new Size(400, 30);
+    cmbMicrophoneDevice.Location = new Point(180, currentY - 3);
+    cmbMicrophoneDevice.SelectedIndexChanged += CmbMicrophoneDevice_SelectedIndexChanged;
+    LoadMicrophoneDevices();
+    panelSettingsPage.Controls.Add(cmbMicrophoneDevice);
+    currentY += sectionSpacing;
+
+    // ===== Overlay Settings Section =====
+    lblOverlaySectionTitle = new Label();
+    lblOverlaySectionTitle.Text = "Overlay Settings";
+    lblOverlaySectionTitle.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+    lblOverlaySectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
+    lblOverlaySectionTitle.Location = new Point(40, currentY);
+    lblOverlaySectionTitle.AutoSize = true;
+    panelSettingsPage.Controls.Add(lblOverlaySectionTitle);
+    currentY += 40;
+
+    lblOverlayPosition = new Label();
+    lblOverlayPosition.Text = "Position:";
+    lblOverlayPosition.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    lblOverlayPosition.ForeColor = Color.FromArgb(100, 100, 100);
+    lblOverlayPosition.Location = new Point(40, currentY);
+    lblOverlayPosition.AutoSize = true;
+    panelSettingsPage.Controls.Add(lblOverlayPosition);
+
+    cmbOverlayPosition = new ComboBox();
+    cmbOverlayPosition.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    cmbOverlayPosition.DropDownStyle = ComboBoxStyle.DropDownList;
+    cmbOverlayPosition.Size = new Size(250, 30);
+    cmbOverlayPosition.Location = new Point(180, currentY - 3);
+    cmbOverlayPosition.Items.AddRange(new[] { "Bottom Center", "Top Center", "Bottom Left", "Bottom Right", "Top Left", "Top Right" });
+    cmbOverlayPosition.SelectedIndex = 0; // Default to "Bottom Center"
+    cmbOverlayPosition.SelectedIndexChanged += CmbOverlayPosition_SelectedIndexChanged;
+    panelSettingsPage.Controls.Add(cmbOverlayPosition);
+    currentY += itemSpacing;
+
+    lblOverlayOpacity = new Label();
+    lblOverlayOpacity.Text = "Opacity:";
+    lblOverlayOpacity.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    lblOverlayOpacity.ForeColor = Color.FromArgb(100, 100, 100);
+    lblOverlayOpacity.Location = new Point(40, currentY);
+    lblOverlayOpacity.AutoSize = true;
+    panelSettingsPage.Controls.Add(lblOverlayOpacity);
+
+    trackOverlayOpacity = new TrackBar();
+    trackOverlayOpacity.Minimum = 0;
+    trackOverlayOpacity.Maximum = 100;
+    trackOverlayOpacity.TickFrequency = 10;
+    trackOverlayOpacity.Size = new Size(200, 45);
+    trackOverlayOpacity.Location = new Point(180, currentY - 5);
+    trackOverlayOpacity.ValueChanged += TrackOverlayOpacity_ValueChanged;
+    panelSettingsPage.Controls.Add(trackOverlayOpacity);
+
+    lblOverlayOpacityValue = new Label();
+    lblOverlayOpacityValue.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    lblOverlayOpacityValue.ForeColor = Color.FromArgb(45, 45, 48);
+    lblOverlayOpacityValue.Location = new Point(390, currentY);
+    lblOverlayOpacityValue.AutoSize = true;
+    lblOverlayOpacityValue.Text = "100%";
+    panelSettingsPage.Controls.Add(lblOverlayOpacityValue);
+    currentY += itemSpacing;
+
+    chkShowOverlay = new CheckBox();
+    chkShowOverlay.Text = "Show overlay";
+    chkShowOverlay.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    chkShowOverlay.ForeColor = Color.FromArgb(45, 45, 48);
+    chkShowOverlay.Location = new Point(40, currentY);
+    chkShowOverlay.AutoSize = true;
+    chkShowOverlay.CheckedChanged += ChkShowOverlay_CheckedChanged;
+    panelSettingsPage.Controls.Add(chkShowOverlay);
+    currentY += sectionSpacing;
+
+    // ===== Application Behavior Section =====
+    lblApplicationSectionTitle = new Label();
+    lblApplicationSectionTitle.Text = "Application Behavior";
+    lblApplicationSectionTitle.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+    lblApplicationSectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
+    lblApplicationSectionTitle.Location = new Point(40, currentY);
+    lblApplicationSectionTitle.AutoSize = true;
+    panelSettingsPage.Controls.Add(lblApplicationSectionTitle);
+    currentY += 40;
+
+    chkStartWithWindows = new CheckBox();
+    chkStartWithWindows.Text = "Start with Windows";
+    chkStartWithWindows.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    chkStartWithWindows.ForeColor = Color.FromArgb(45, 45, 48);
+    chkStartWithWindows.Location = new Point(40, currentY);
+    chkStartWithWindows.AutoSize = true;
+    chkStartWithWindows.CheckedChanged += ChkStartWithWindows_CheckedChanged;
+    panelSettingsPage.Controls.Add(chkStartWithWindows);
+    currentY += itemSpacing;
+
+    chkStartMinimized = new CheckBox();
+    chkStartMinimized.Text = "Start minimized";
+    chkStartMinimized.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    chkStartMinimized.ForeColor = Color.FromArgb(45, 45, 48);
+    chkStartMinimized.Location = new Point(40, currentY);
+    chkStartMinimized.AutoSize = true;
+    chkStartMinimized.CheckedChanged += ChkStartMinimized_CheckedChanged;
+    panelSettingsPage.Controls.Add(chkStartMinimized);
+    currentY += itemSpacing;
+
+    chkMinimizeToTray = new CheckBox();
+    chkMinimizeToTray.Text = "Minimize to system tray";
+    chkMinimizeToTray.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    chkMinimizeToTray.ForeColor = Color.FromArgb(45, 45, 48);
+    chkMinimizeToTray.Location = new Point(40, currentY);
+    chkMinimizeToTray.AutoSize = true;
+    chkMinimizeToTray.CheckedChanged += ChkMinimizeToTray_CheckedChanged;
+    panelSettingsPage.Controls.Add(chkMinimizeToTray);
+    currentY += sectionSpacing;
+
+    // ===== Speech Recognition Section =====
+    lblRecognitionSectionTitle = new Label();
+    lblRecognitionSectionTitle.Text = "Speech Recognition";
+    lblRecognitionSectionTitle.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+    lblRecognitionSectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
+    lblRecognitionSectionTitle.Location = new Point(40, currentY);
+    lblRecognitionSectionTitle.AutoSize = true;
+    panelSettingsPage.Controls.Add(lblRecognitionSectionTitle);
+    currentY += 40;
+
+    lblRecognitionSensitivity = new Label();
+    lblRecognitionSensitivity.Text = "Sensitivity:";
+    lblRecognitionSensitivity.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    lblRecognitionSensitivity.ForeColor = Color.FromArgb(100, 100, 100);
+    lblRecognitionSensitivity.Location = new Point(40, currentY);
+    lblRecognitionSensitivity.AutoSize = true;
+    panelSettingsPage.Controls.Add(lblRecognitionSensitivity);
+
+    cmbRecognitionSensitivity = new ComboBox();
+    cmbRecognitionSensitivity.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    cmbRecognitionSensitivity.DropDownStyle = ComboBoxStyle.DropDownList;
+    cmbRecognitionSensitivity.Size = new Size(200, 30);
+    cmbRecognitionSensitivity.Location = new Point(180, currentY - 3);
+    cmbRecognitionSensitivity.Items.AddRange(new[] { "Low", "Medium", "High" });
+    cmbRecognitionSensitivity.SelectedIndexChanged += CmbRecognitionSensitivity_SelectedIndexChanged;
+    panelSettingsPage.Controls.Add(cmbRecognitionSensitivity);
+    currentY += itemSpacing;
+
+    lblAutoInjectDelay = new Label();
+    lblAutoInjectDelay.Text = "Auto-inject delay (ms):";
+    lblAutoInjectDelay.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    lblAutoInjectDelay.ForeColor = Color.FromArgb(100, 100, 100);
+    lblAutoInjectDelay.Location = new Point(40, currentY + 3);
+    lblAutoInjectDelay.AutoSize = true;
+    panelSettingsPage.Controls.Add(lblAutoInjectDelay);
+
+    numAutoInjectDelay = new NumericUpDown();
+    numAutoInjectDelay.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    numAutoInjectDelay.Minimum = 0;
+    numAutoInjectDelay.Maximum = 5000;
+    numAutoInjectDelay.Increment = 100;
+    numAutoInjectDelay.Size = new Size(120, 30);
+    numAutoInjectDelay.Location = new Point(180, currentY - 3);
+    numAutoInjectDelay.BorderStyle = BorderStyle.None;
+    numAutoInjectDelay.ValueChanged += NumAutoInjectDelay_ValueChanged;
+    panelSettingsPage.Controls.Add(numAutoInjectDelay);
+    currentY += sectionSpacing;
+
+    // ===== Data Management Section =====
+    lblDataSectionTitle = new Label();
+    lblDataSectionTitle.Text = "Data Management";
+    lblDataSectionTitle.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+    lblDataSectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
+    lblDataSectionTitle.Location = new Point(40, currentY);
+    lblDataSectionTitle.AutoSize = true;
+    panelSettingsPage.Controls.Add(lblDataSectionTitle);
+    currentY += 40;
+
+    btnClearSpeechHistory = new Button();
+    btnClearSpeechHistory.Text = "Clear Speech History";
+    btnClearSpeechHistory.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    btnClearSpeechHistory.FlatStyle = FlatStyle.Flat;
+    btnClearSpeechHistory.FlatAppearance.BorderSize = 0;
+    btnClearSpeechHistory.BackColor = Color.White;
+    btnClearSpeechHistory.ForeColor = Color.FromArgb(232, 17, 35);
+    btnClearSpeechHistory.Cursor = Cursors.Hand;
+    btnClearSpeechHistory.Size = new Size(180, 35);
+    btnClearSpeechHistory.Location = new Point(40, currentY);
+    btnClearSpeechHistory.Click += BtnClearSpeechHistory_Click;
+    btnClearSpeechHistory.MouseEnter += BtnClearData_MouseEnter;
+    btnClearSpeechHistory.MouseLeave += BtnClearData_MouseLeave;
+    panelSettingsPage.Controls.Add(btnClearSpeechHistory);
+    currentY += itemSpacing;
+
+    btnClearDictionary = new Button();
+    btnClearDictionary.Text = "Clear Dictionary";
+    btnClearDictionary.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    btnClearDictionary.FlatStyle = FlatStyle.Flat;
+    btnClearDictionary.FlatAppearance.BorderSize = 0;
+    btnClearDictionary.BackColor = Color.White;
+    btnClearDictionary.ForeColor = Color.FromArgb(232, 17, 35);
+    btnClearDictionary.Cursor = Cursors.Hand;
+    btnClearDictionary.Size = new Size(180, 35);
+    btnClearDictionary.Location = new Point(40, currentY);
+    btnClearDictionary.Click += BtnClearDictionary_Click;
+    btnClearDictionary.MouseEnter += BtnClearData_MouseEnter;
+    btnClearDictionary.MouseLeave += BtnClearData_MouseLeave;
+    panelSettingsPage.Controls.Add(btnClearDictionary);
+    currentY += itemSpacing;
+
+    btnClearSnippets = new Button();
+    btnClearSnippets.Text = "Clear Snippets";
+    btnClearSnippets.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    btnClearSnippets.FlatStyle = FlatStyle.Flat;
+    btnClearSnippets.FlatAppearance.BorderSize = 0;
+    btnClearSnippets.BackColor = Color.White;
+    btnClearSnippets.ForeColor = Color.FromArgb(232, 17, 35);
+    btnClearSnippets.Cursor = Cursors.Hand;
+    btnClearSnippets.Size = new Size(180, 35);
+    btnClearSnippets.Location = new Point(40, currentY);
+    btnClearSnippets.Click += BtnClearSnippets_Click;
+    btnClearSnippets.MouseEnter += BtnClearData_MouseEnter;
+    btnClearSnippets.MouseLeave += BtnClearData_MouseLeave;
+    panelSettingsPage.Controls.Add(btnClearSnippets);
+    currentY += itemSpacing;
+
+    btnExportData = new Button();
+    btnExportData.Text = "Export Data";
+    btnExportData.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    btnExportData.FlatStyle = FlatStyle.Flat;
+    btnExportData.FlatAppearance.BorderSize = 0;
+    btnExportData.BackColor = Color.FromArgb(45, 45, 48);
+    btnExportData.ForeColor = Color.White;
+    btnExportData.Cursor = Cursors.Hand;
+    btnExportData.Size = new Size(180, 35);
+    btnExportData.Location = new Point(40, currentY);
+    btnExportData.Click += BtnExportData_Click;
+    btnExportData.MouseEnter += BtnExportData_MouseEnter;
+    btnExportData.MouseLeave += BtnExportData_MouseLeave;
+    panelSettingsPage.Controls.Add(btnExportData);
+    currentY += btnExportData.Height + itemSpacing;
+
+    // Add bottom spacer to ensure content doesn't go over the border
+    // This ensures the last control respects the bottom padding (50px)
+    Panel bottomSpacer = new Panel();
+    bottomSpacer.Size = new Size(1, 50); // Match bottom padding
+    bottomSpacer.Location = new Point(0, currentY);
+    bottomSpacer.BackColor = Color.Transparent;
+    panelSettingsPage.Controls.Add(bottomSpacer);
+
+    // Load all settings
+    LoadAllSettings();
 
     // Handle resize
     panelSettingsPage.Resize += PanelSettingsPage_Resize;
   }
 
+  private void HideScrollbar(Panel panel)
+  {
+    if (panel.IsHandleCreated)
+    {
+      ShowScrollBar(panel.Handle, SB_VERT, false);
+    }
+  }
+
   private void PanelSettingsPage_Resize(object? sender, EventArgs e)
   {
+    // Hide scrollbar after resize
+    if (panelSettingsPage != null)
+    {
+      HideScrollbar(panelSettingsPage);
+    }
+    
     // Settings page layout is simple and doesn't need complex resize logic
     // But we can ensure description label doesn't overflow
     if (lblHotkeyDescription != null && panelSettingsPage != null)
@@ -2757,6 +3167,522 @@ public partial class DashboardForm : Form
     {
       displayLabel.Text = string.Join(" + ", parts);
       displayLabel.ForeColor = Color.FromArgb(45, 45, 48);
+    }
+  }
+
+  // Load all settings
+  private void LoadAllSettings()
+  {
+    if (databaseService == null)
+      return;
+
+    LoadAndDisplayHotkey();
+    LoadMicrophoneSettings();
+    LoadOverlaySettings();
+    LoadApplicationSettings();
+    LoadRecognitionSettings();
+  }
+
+  // Microphone Settings
+  private void LoadMicrophoneDevices()
+  {
+    if (cmbMicrophoneDevice == null)
+      return;
+
+    cmbMicrophoneDevice.Items.Clear();
+    var devices = SpeechRecognitionService.GetAvailableMicrophones();
+    
+    foreach (var device in devices)
+    {
+      cmbMicrophoneDevice.Items.Add($"{device.deviceNumber}: {device.deviceName}");
+    }
+
+    if (cmbMicrophoneDevice.Items.Count > 0)
+    {
+      cmbMicrophoneDevice.SelectedIndex = 0;
+    }
+  }
+
+  private void LoadMicrophoneSettings()
+  {
+    if (databaseService == null || cmbMicrophoneDevice == null)
+      return;
+
+    try
+    {
+      string? deviceId = databaseService.GetUserMicrophonePreference(username);
+      if (!string.IsNullOrEmpty(deviceId) && int.TryParse(deviceId, out int deviceNumber) && cmbMicrophoneDevice != null)
+      {
+        for (int i = 0; i < cmbMicrophoneDevice.Items.Count; i++)
+        {
+          string item = cmbMicrophoneDevice.Items[i]?.ToString() ?? "";
+          if (item.StartsWith($"{deviceNumber}:"))
+          {
+            cmbMicrophoneDevice.SelectedIndex = i;
+            break;
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to load microphone settings: {ex.Message}");
+    }
+  }
+
+  private void CmbMicrophoneDevice_SelectedIndexChanged(object? sender, EventArgs e)
+  {
+    if (cmbMicrophoneDevice == null || databaseService == null)
+      return;
+
+    try
+    {
+      string selected = cmbMicrophoneDevice.SelectedItem?.ToString() ?? "";
+      if (selected.Contains(":"))
+      {
+        string deviceNumberStr = selected.Split(':')[0];
+        if (int.TryParse(deviceNumberStr, out int deviceNumber))
+        {
+          databaseService.SaveUserMicrophonePreference(username, deviceNumberStr);
+          if (speechService != null)
+          {
+            speechService.SetMicrophoneDevice(deviceNumber);
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      MessageBox.Show($"Failed to save microphone preference: {ex.Message}", "Error",
+        MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+  }
+
+  // Overlay Settings
+  private void LoadOverlaySettings()
+  {
+    if (databaseService == null || cmbOverlayPosition == null || trackOverlayOpacity == null || chkShowOverlay == null || overlayForm == null)
+      return;
+
+    try
+    {
+      var (position, opacity, showOverlay) = databaseService.GetUserOverlayPreferences(username);
+      
+      // Set position
+      string positionDisplay = position switch
+      {
+        "top_center" => "Top Center",
+        "top_left" => "Top Left",
+        "top_right" => "Top Right",
+        "bottom_left" => "Bottom Left",
+        "bottom_right" => "Bottom Right",
+        _ => "Bottom Center"
+      };
+      cmbOverlayPosition.SelectedItem = positionDisplay;
+      // Ensure a value is selected (fallback to default if not found)
+      if (cmbOverlayPosition.SelectedIndex == -1)
+        cmbOverlayPosition.SelectedIndex = 0;
+      
+      // Set opacity
+      trackOverlayOpacity.Value = opacity;
+      if (lblOverlayOpacityValue != null)
+        lblOverlayOpacityValue.Text = $"{opacity}%";
+      
+      // Set show overlay
+      chkShowOverlay.Checked = showOverlay;
+      
+      // Apply to overlay form
+      overlayForm.SetOverlayPosition(position);
+      overlayForm.SetOverlayOpacity(opacity);
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to load overlay settings: {ex.Message}");
+    }
+  }
+
+  private void CmbOverlayPosition_SelectedIndexChanged(object? sender, EventArgs e)
+  {
+    if (cmbOverlayPosition == null || databaseService == null || overlayForm == null)
+      return;
+
+    try
+    {
+      string selected = cmbOverlayPosition.SelectedItem?.ToString() ?? "Bottom Center";
+      string position = selected switch
+      {
+        "Top Center" => "top_center",
+        "Top Left" => "top_left",
+        "Top Right" => "top_right",
+        "Bottom Left" => "bottom_left",
+        "Bottom Right" => "bottom_right",
+        _ => "bottom_center"
+      };
+
+      if (trackOverlayOpacity != null && chkShowOverlay != null)
+      {
+        databaseService.SaveUserOverlayPreferences(username, position, trackOverlayOpacity.Value, chkShowOverlay.Checked);
+        overlayForm.SetOverlayPosition(position);
+      }
+    }
+    catch (Exception ex)
+    {
+      MessageBox.Show($"Failed to save overlay position: {ex.Message}", "Error",
+        MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+  }
+
+  private void TrackOverlayOpacity_ValueChanged(object? sender, EventArgs e)
+  {
+    if (trackOverlayOpacity == null || databaseService == null || overlayForm == null)
+      return;
+
+    try
+    {
+      int opacity = trackOverlayOpacity.Value;
+      if (lblOverlayOpacityValue != null)
+        lblOverlayOpacityValue.Text = $"{opacity}%";
+
+      if (cmbOverlayPosition != null && chkShowOverlay != null)
+      {
+        string position = cmbOverlayPosition.SelectedItem?.ToString() ?? "Bottom Center";
+        string positionValue = position switch
+        {
+          "Top Center" => "top_center",
+          "Top Left" => "top_left",
+          "Top Right" => "top_right",
+          "Bottom Left" => "bottom_left",
+          "Bottom Right" => "bottom_right",
+          _ => "bottom_center"
+        };
+        databaseService.SaveUserOverlayPreferences(username, positionValue, opacity, chkShowOverlay.Checked);
+        overlayForm.SetOverlayOpacity(opacity);
+      }
+    }
+    catch (Exception ex)
+    {
+      MessageBox.Show($"Failed to save overlay opacity: {ex.Message}", "Error",
+        MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+  }
+
+  private void ChkShowOverlay_CheckedChanged(object? sender, EventArgs e)
+  {
+    if (chkShowOverlay == null || databaseService == null)
+      return;
+
+    try
+    {
+      if (cmbOverlayPosition != null && trackOverlayOpacity != null)
+      {
+        string position = cmbOverlayPosition.SelectedItem?.ToString() ?? "Bottom Center";
+        string positionValue = position switch
+        {
+          "Top Center" => "top_center",
+          "Top Left" => "top_left",
+          "Top Right" => "top_right",
+          "Bottom Left" => "bottom_left",
+          "Bottom Right" => "bottom_right",
+          _ => "bottom_center"
+        };
+        databaseService.SaveUserOverlayPreferences(username, positionValue, trackOverlayOpacity.Value, chkShowOverlay.Checked);
+      }
+    }
+    catch (Exception ex)
+    {
+      MessageBox.Show($"Failed to save overlay visibility: {ex.Message}", "Error",
+        MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+  }
+
+  // Application Settings
+  private void LoadApplicationSettings()
+  {
+    if (databaseService == null || chkStartWithWindows == null || chkStartMinimized == null || chkMinimizeToTray == null)
+      return;
+
+    try
+    {
+      var (startWithWindows, startMinimized, minimizeToTray) = databaseService.GetUserApplicationPreferences(username);
+      
+      chkStartWithWindows.Checked = startWithWindows;
+      chkStartMinimized.Checked = startMinimized;
+      chkMinimizeToTray.Checked = minimizeToTray;
+      
+      // Sync with registry
+      bool registryStartup = StartupManager.IsStartupEnabled();
+      if (startWithWindows != registryStartup)
+      {
+        StartupManager.SetStartup(startWithWindows);
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to load application settings: {ex.Message}");
+    }
+  }
+
+  private void ChkStartWithWindows_CheckedChanged(object? sender, EventArgs e)
+  {
+    if (chkStartWithWindows == null || databaseService == null)
+      return;
+
+    try
+    {
+      bool startWithWindows = chkStartWithWindows.Checked;
+      StartupManager.SetStartup(startWithWindows);
+      
+      if (chkStartMinimized != null && chkMinimizeToTray != null)
+      {
+        databaseService.SaveUserApplicationPreferences(username, startWithWindows, chkStartMinimized.Checked, chkMinimizeToTray.Checked);
+      }
+    }
+    catch (Exception ex)
+    {
+      MessageBox.Show($"Failed to save startup setting: {ex.Message}", "Error",
+        MessageBoxButtons.OK, MessageBoxIcon.Error);
+      chkStartWithWindows.Checked = !chkStartWithWindows.Checked; // Revert
+    }
+  }
+
+  private void ChkStartMinimized_CheckedChanged(object? sender, EventArgs e)
+  {
+    if (chkStartMinimized == null || databaseService == null)
+      return;
+
+    try
+    {
+      if (chkStartWithWindows != null && chkMinimizeToTray != null)
+      {
+        databaseService.SaveUserApplicationPreferences(username, chkStartWithWindows.Checked, chkStartMinimized.Checked, chkMinimizeToTray.Checked);
+      }
+    }
+    catch (Exception ex)
+    {
+      MessageBox.Show($"Failed to save start minimized setting: {ex.Message}", "Error",
+        MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+  }
+
+  private void ChkMinimizeToTray_CheckedChanged(object? sender, EventArgs e)
+  {
+    if (chkMinimizeToTray == null || databaseService == null)
+      return;
+
+    try
+    {
+      if (chkStartWithWindows != null && chkStartMinimized != null)
+      {
+        databaseService.SaveUserApplicationPreferences(username, chkStartWithWindows.Checked, chkStartMinimized.Checked, chkMinimizeToTray.Checked);
+      }
+    }
+    catch (Exception ex)
+    {
+      MessageBox.Show($"Failed to save minimize to tray setting: {ex.Message}", "Error",
+        MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+  }
+
+  // Recognition Settings
+  private void LoadRecognitionSettings()
+  {
+    if (databaseService == null || cmbRecognitionSensitivity == null || numAutoInjectDelay == null)
+      return;
+
+    try
+    {
+      var (sensitivity, delay) = databaseService.GetUserRecognitionPreferences(username);
+      
+      cmbRecognitionSensitivity.SelectedItem = sensitivity.Substring(0, 1).ToUpper() + sensitivity.Substring(1);
+      numAutoInjectDelay.Value = delay;
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to load recognition settings: {ex.Message}");
+    }
+  }
+
+  private void CmbRecognitionSensitivity_SelectedIndexChanged(object? sender, EventArgs e)
+  {
+    if (cmbRecognitionSensitivity == null || databaseService == null)
+      return;
+
+    try
+    {
+      string selected = cmbRecognitionSensitivity?.SelectedItem?.ToString()?.ToLower() ?? "medium";
+      if (numAutoInjectDelay != null && databaseService != null)
+      {
+        databaseService.SaveUserRecognitionPreferences(username, selected, (int)numAutoInjectDelay.Value);
+      }
+    }
+    catch (Exception ex)
+    {
+      MessageBox.Show($"Failed to save recognition sensitivity: {ex.Message}", "Error",
+        MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+  }
+
+  private void NumAutoInjectDelay_ValueChanged(object? sender, EventArgs e)
+  {
+    if (numAutoInjectDelay == null || databaseService == null)
+      return;
+
+    try
+    {
+      string sensitivity = cmbRecognitionSensitivity?.SelectedItem?.ToString()?.ToLower() ?? "medium";
+      databaseService.SaveUserRecognitionPreferences(username, sensitivity, (int)numAutoInjectDelay.Value);
+    }
+    catch (Exception ex)
+    {
+      MessageBox.Show($"Failed to save auto-inject delay: {ex.Message}", "Error",
+        MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+  }
+
+  // Data Management
+  private void BtnClearSpeechHistory_Click(object? sender, EventArgs e)
+  {
+    if (databaseService == null)
+      return;
+
+    DialogResult result = MessageBox.Show(
+      "Are you sure you want to clear all speech history? This action cannot be undone.",
+      "Confirm Clear",
+      MessageBoxButtons.YesNo,
+      MessageBoxIcon.Warning);
+
+    if (result == DialogResult.Yes)
+    {
+      try
+      {
+        databaseService.ClearAllSpeechHistory(username);
+        LoadSpeechHistory();
+        RefreshStats();
+        MessageBox.Show("Speech history cleared successfully.", "Success",
+          MessageBoxButtons.OK, MessageBoxIcon.Information);
+      }
+      catch (Exception ex)
+      {
+        MessageBox.Show($"Failed to clear speech history: {ex.Message}", "Error",
+          MessageBoxButtons.OK, MessageBoxIcon.Error);
+      }
+    }
+  }
+
+  private void BtnClearDictionary_Click(object? sender, EventArgs e)
+  {
+    if (databaseService == null)
+      return;
+
+    DialogResult result = MessageBox.Show(
+      "Are you sure you want to clear all dictionary entries? This action cannot be undone.",
+      "Confirm Clear",
+      MessageBoxButtons.YesNo,
+      MessageBoxIcon.Warning);
+
+    if (result == DialogResult.Yes)
+    {
+      try
+      {
+        databaseService.ClearAllDictionary(username);
+        if (panelDictionaryList != null)
+          LoadDictionaryEntries();
+        MessageBox.Show("Dictionary cleared successfully.", "Success",
+          MessageBoxButtons.OK, MessageBoxIcon.Information);
+      }
+      catch (Exception ex)
+      {
+        MessageBox.Show($"Failed to clear dictionary: {ex.Message}", "Error",
+          MessageBoxButtons.OK, MessageBoxIcon.Error);
+      }
+    }
+  }
+
+  private void BtnClearSnippets_Click(object? sender, EventArgs e)
+  {
+    if (databaseService == null)
+      return;
+
+    DialogResult result = MessageBox.Show(
+      "Are you sure you want to clear all snippets? This action cannot be undone.",
+      "Confirm Clear",
+      MessageBoxButtons.YesNo,
+      MessageBoxIcon.Warning);
+
+    if (result == DialogResult.Yes)
+    {
+      try
+      {
+        databaseService.ClearAllSnippets(username);
+        if (panelSnippetsList != null)
+          LoadSnippetsEntries();
+        MessageBox.Show("Snippets cleared successfully.", "Success",
+          MessageBoxButtons.OK, MessageBoxIcon.Information);
+      }
+      catch (Exception ex)
+      {
+        MessageBox.Show($"Failed to clear snippets: {ex.Message}", "Error",
+          MessageBoxButtons.OK, MessageBoxIcon.Error);
+      }
+    }
+  }
+
+  private void BtnExportData_Click(object? sender, EventArgs e)
+  {
+    if (databaseService == null)
+      return;
+
+    try
+    {
+      string jsonData = databaseService.ExportUserData(username);
+      
+      SaveFileDialog saveDialog = new SaveFileDialog();
+      saveDialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+      saveDialog.FileName = $"WinFormTest_Export_{DateTime.Now:yyyyMMdd_HHmmss}.json";
+      
+      if (saveDialog.ShowDialog() == DialogResult.OK)
+      {
+        File.WriteAllText(saveDialog.FileName, jsonData);
+        MessageBox.Show($"Data exported successfully to:\n{saveDialog.FileName}", "Export Success",
+          MessageBoxButtons.OK, MessageBoxIcon.Information);
+      }
+    }
+    catch (Exception ex)
+    {
+      MessageBox.Show($"Failed to export data: {ex.Message}", "Error",
+        MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+  }
+
+  private void BtnClearData_MouseEnter(object? sender, EventArgs e)
+  {
+    if (sender is Button btn)
+    {
+      btn.BackColor = Color.FromArgb(250, 245, 245);
+    }
+  }
+
+  private void BtnClearData_MouseLeave(object? sender, EventArgs e)
+  {
+    if (sender is Button btn)
+    {
+      btn.BackColor = Color.White;
+    }
+  }
+
+  private void BtnExportData_MouseEnter(object? sender, EventArgs e)
+  {
+    if (sender is Button btn)
+    {
+      btn.BackColor = Color.FromArgb(35, 35, 38);
+    }
+  }
+
+  private void BtnExportData_MouseLeave(object? sender, EventArgs e)
+  {
+    if (sender is Button btn)
+    {
+      btn.BackColor = Color.FromArgb(45, 45, 48);
     }
   }
 }
