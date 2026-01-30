@@ -14,7 +14,6 @@ public partial class SpeechOverlayForm : Form
   private int dotCount = 0;
   private int[] waveHeights = new int[4] { 3, 6, 4, 5 };
   private string overlayPosition = "bottom_center";
-  private int overlayOpacity = 100;
 
   public SpeechOverlayForm()
   {
@@ -42,16 +41,9 @@ public partial class SpeechOverlayForm : Form
     UpdateOverlayPosition();
   }
 
-  public void SetOverlayOpacity(int opacity)
-  {
-    overlayOpacity = Math.Max(0, Math.Min(100, opacity));
-    this.Opacity = overlayOpacity / 100.0;
-  }
-
   private void SetupOverlay()
   {
     UpdateOverlayPosition();
-    SetOverlayOpacity(overlayOpacity);
     SetState(OverlayState.Idle);
   }
 

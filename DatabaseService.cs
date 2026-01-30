@@ -986,13 +986,8 @@ public class DatabaseService
         {
           "MicrophoneDeviceId", "NVARCHAR(100)",
           "OverlayPosition", "NVARCHAR(50)",
-          "OverlayOpacity", "INT",
-          "ShowOverlay", "BIT",
-          "StartWithWindows", "BIT",
           "StartMinimized", "BIT",
-          "MinimizeToTray", "BIT",
-          "RecognitionSensitivity", "NVARCHAR(20)",
-          "AutoInjectDelay", "INT"
+          "MinimizeToTray", "BIT"
         };
 
         // Check existing columns
@@ -1024,25 +1019,11 @@ public class DatabaseService
             string defaultValue = "";
             if (columnType == "BIT")
             {
-              if (columnName == "ShowOverlay")
-                defaultValue = " DEFAULT 1";
-              else
-                defaultValue = " DEFAULT 0";
-            }
-            else if (columnType == "INT")
-            {
-              if (columnName == "OverlayOpacity")
-                defaultValue = " DEFAULT 100";
-              else if (columnName == "AutoInjectDelay")
-                defaultValue = " DEFAULT 0";
+              defaultValue = " DEFAULT 0";
             }
             else if (columnType == "NVARCHAR(50)" && columnName == "OverlayPosition")
             {
               defaultValue = " DEFAULT 'bottom_center'";
-            }
-            else if (columnType == "NVARCHAR(20)" && columnName == "RecognitionSensitivity")
-            {
-              defaultValue = " DEFAULT 'medium'";
             }
 
             string alterQuery = $"ALTER TABLE UserSettings ADD {columnName} {columnType}{defaultValue}";
@@ -1148,10 +1129,10 @@ public class DatabaseService
   }
 
   // Overlay Settings
-  public (string position, int opacity, bool showOverlay) GetUserOverlayPreferences(string username)
+  public string GetUserOverlayPosition(string username)
   {
     if (string.IsNullOrWhiteSpace(username))
-      return ("bottom_center", 100, true);
+      return "bottom_center";
 
     try
     {
@@ -1159,31 +1140,26 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        string query = "SELECT OverlayPosition, OverlayOpacity, ShowOverlay FROM UserSettings WHERE Username = @username";
+        string query = "SELECT OverlayPosition FROM UserSettings WHERE Username = @username";
         using (SqlCommand command = new SqlCommand(query, connection))
         {
           command.Parameters.AddWithValue("@username", username);
-          using (SqlDataReader reader = command.ExecuteReader())
+          object? result = command.ExecuteScalar();
+          if (result != null && result != DBNull.Value)
           {
-            if (reader.Read())
-            {
-              string position = reader.IsDBNull(0) ? "bottom_center" : reader.GetString(0);
-              int opacity = reader.IsDBNull(1) ? 100 : reader.GetInt32(1);
-              bool showOverlay = reader.IsDBNull(2) ? true : reader.GetBoolean(2);
-              return (position, opacity, showOverlay);
-            }
+            return result.ToString() ?? "bottom_center";
           }
         }
       }
     }
     catch (Exception ex)
     {
-      System.Diagnostics.Debug.WriteLine($"Failed to get overlay preferences: {ex.Message}");
+      System.Diagnostics.Debug.WriteLine($"Failed to get overlay position: {ex.Message}");
     }
-    return ("bottom_center", 100, true);
+    return "bottom_center";
   }
 
-  public void SaveUserOverlayPreferences(string username, string position, int opacity, bool showOverlay)
+  public void SaveUserOverlayPosition(string username, string position)
   {
     if (string.IsNullOrWhiteSpace(username))
       throw new ArgumentException("Username cannot be empty.");
@@ -1204,27 +1180,23 @@ public class DatabaseService
 
         if (exists)
         {
-          string updateQuery = "UPDATE UserSettings SET OverlayPosition = @position, OverlayOpacity = @opacity, ShowOverlay = @showOverlay, UpdatedAt = @updatedAt WHERE Username = @username";
+          string updateQuery = "UPDATE UserSettings SET OverlayPosition = @position, UpdatedAt = @updatedAt WHERE Username = @username";
           using (SqlCommand command = new SqlCommand(updateQuery, connection))
           {
             command.Parameters.AddWithValue("@username", username);
             command.Parameters.AddWithValue("@position", position);
-            command.Parameters.AddWithValue("@opacity", opacity);
-            command.Parameters.AddWithValue("@showOverlay", showOverlay);
             command.Parameters.AddWithValue("@updatedAt", DateTime.Now);
             command.ExecuteNonQuery();
           }
         }
         else
         {
-          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, OverlayPosition, OverlayOpacity, ShowOverlay, CreatedAt) VALUES (@username, @style, @position, @opacity, @showOverlay, @createdAt)";
+          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, OverlayPosition, CreatedAt) VALUES (@username, @style, @position, @createdAt)";
           using (SqlCommand command = new SqlCommand(insertQuery, connection))
           {
             command.Parameters.AddWithValue("@username", username);
             command.Parameters.AddWithValue("@style", "formal");
             command.Parameters.AddWithValue("@position", position);
-            command.Parameters.AddWithValue("@opacity", opacity);
-            command.Parameters.AddWithValue("@showOverlay", showOverlay);
             command.Parameters.AddWithValue("@createdAt", DateTime.Now);
             command.ExecuteNonQuery();
           }
@@ -1233,16 +1205,16 @@ public class DatabaseService
     }
     catch (Exception ex)
     {
-      System.Diagnostics.Debug.WriteLine($"Failed to save overlay preferences: {ex.Message}");
+      System.Diagnostics.Debug.WriteLine($"Failed to save overlay position: {ex.Message}");
       throw;
     }
   }
 
   // Application Behavior Settings
-  public (bool startWithWindows, bool startMinimized, bool minimizeToTray) GetUserApplicationPreferences(string username)
+  public (bool startMinimized, bool minimizeToTray) GetUserApplicationPreferences(string username)
   {
     if (string.IsNullOrWhiteSpace(username))
-      return (false, false, false);
+      return (false, false);
 
     try
     {
@@ -1250,7 +1222,7 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        string query = "SELECT StartWithWindows, StartMinimized, MinimizeToTray FROM UserSettings WHERE Username = @username";
+        string query = "SELECT StartMinimized, MinimizeToTray FROM UserSettings WHERE Username = @username";
         using (SqlCommand command = new SqlCommand(query, connection))
         {
           command.Parameters.AddWithValue("@username", username);
@@ -1258,10 +1230,9 @@ public class DatabaseService
           {
             if (reader.Read())
             {
-              bool startWithWindows = !reader.IsDBNull(0) && reader.GetBoolean(0);
-              bool startMinimized = !reader.IsDBNull(1) && reader.GetBoolean(1);
-              bool minimizeToTray = !reader.IsDBNull(2) && reader.GetBoolean(2);
-              return (startWithWindows, startMinimized, minimizeToTray);
+              bool startMinimized = !reader.IsDBNull(0) && reader.GetBoolean(0);
+              bool minimizeToTray = !reader.IsDBNull(1) && reader.GetBoolean(1);
+              return (startMinimized, minimizeToTray);
             }
           }
         }
@@ -1271,10 +1242,10 @@ public class DatabaseService
     {
       System.Diagnostics.Debug.WriteLine($"Failed to get application preferences: {ex.Message}");
     }
-    return (false, false, false);
+    return (false, false);
   }
 
-  public void SaveUserApplicationPreferences(string username, bool startWithWindows, bool startMinimized, bool minimizeToTray)
+  public void SaveUserApplicationPreferences(string username, bool startMinimized, bool minimizeToTray)
   {
     if (string.IsNullOrWhiteSpace(username))
       throw new ArgumentException("Username cannot be empty.");
@@ -1295,11 +1266,10 @@ public class DatabaseService
 
         if (exists)
         {
-          string updateQuery = "UPDATE UserSettings SET StartWithWindows = @startWithWindows, StartMinimized = @startMinimized, MinimizeToTray = @minimizeToTray, UpdatedAt = @updatedAt WHERE Username = @username";
+          string updateQuery = "UPDATE UserSettings SET StartMinimized = @startMinimized, MinimizeToTray = @minimizeToTray, UpdatedAt = @updatedAt WHERE Username = @username";
           using (SqlCommand command = new SqlCommand(updateQuery, connection))
           {
             command.Parameters.AddWithValue("@username", username);
-            command.Parameters.AddWithValue("@startWithWindows", startWithWindows);
             command.Parameters.AddWithValue("@startMinimized", startMinimized);
             command.Parameters.AddWithValue("@minimizeToTray", minimizeToTray);
             command.Parameters.AddWithValue("@updatedAt", DateTime.Now);
@@ -1308,12 +1278,11 @@ public class DatabaseService
         }
         else
         {
-          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, StartWithWindows, StartMinimized, MinimizeToTray, CreatedAt) VALUES (@username, @style, @startWithWindows, @startMinimized, @minimizeToTray, @createdAt)";
+          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, StartMinimized, MinimizeToTray, CreatedAt) VALUES (@username, @style, @startMinimized, @minimizeToTray, @createdAt)";
           using (SqlCommand command = new SqlCommand(insertQuery, connection))
           {
             command.Parameters.AddWithValue("@username", username);
             command.Parameters.AddWithValue("@style", "formal");
-            command.Parameters.AddWithValue("@startWithWindows", startWithWindows);
             command.Parameters.AddWithValue("@startMinimized", startMinimized);
             command.Parameters.AddWithValue("@minimizeToTray", minimizeToTray);
             command.Parameters.AddWithValue("@createdAt", DateTime.Now);
@@ -1325,97 +1294,6 @@ public class DatabaseService
     catch (Exception ex)
     {
       System.Diagnostics.Debug.WriteLine($"Failed to save application preferences: {ex.Message}");
-      throw;
-    }
-  }
-
-  // Speech Recognition Settings
-  public (string sensitivity, int autoInjectDelay) GetUserRecognitionPreferences(string username)
-  {
-    if (string.IsNullOrWhiteSpace(username))
-      return ("medium", 0);
-
-    try
-    {
-      EnsureSettingsColumnsExist();
-      using (SqlConnection connection = new SqlConnection(connectionString))
-      {
-        connection.Open();
-        string query = "SELECT RecognitionSensitivity, AutoInjectDelay FROM UserSettings WHERE Username = @username";
-        using (SqlCommand command = new SqlCommand(query, connection))
-        {
-          command.Parameters.AddWithValue("@username", username);
-          using (SqlDataReader reader = command.ExecuteReader())
-          {
-            if (reader.Read())
-            {
-              string sensitivity = reader.IsDBNull(0) ? "medium" : reader.GetString(0);
-              int delay = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
-              return (sensitivity, delay);
-            }
-          }
-        }
-      }
-    }
-    catch (Exception ex)
-    {
-      System.Diagnostics.Debug.WriteLine($"Failed to get recognition preferences: {ex.Message}");
-    }
-    return ("medium", 0);
-  }
-
-  public void SaveUserRecognitionPreferences(string username, string sensitivity, int autoInjectDelay)
-  {
-    if (string.IsNullOrWhiteSpace(username))
-      throw new ArgumentException("Username cannot be empty.");
-
-    if (sensitivity != "low" && sensitivity != "medium" && sensitivity != "high")
-      throw new ArgumentException("Sensitivity must be 'low', 'medium', or 'high'.");
-
-    try
-    {
-      EnsureSettingsColumnsExist();
-      using (SqlConnection connection = new SqlConnection(connectionString))
-      {
-        connection.Open();
-        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
-        bool exists = false;
-        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
-        {
-          checkCommand.Parameters.AddWithValue("@username", username);
-          exists = (int)checkCommand.ExecuteScalar() > 0;
-        }
-
-        if (exists)
-        {
-          string updateQuery = "UPDATE UserSettings SET RecognitionSensitivity = @sensitivity, AutoInjectDelay = @delay, UpdatedAt = @updatedAt WHERE Username = @username";
-          using (SqlCommand command = new SqlCommand(updateQuery, connection))
-          {
-            command.Parameters.AddWithValue("@username", username);
-            command.Parameters.AddWithValue("@sensitivity", sensitivity);
-            command.Parameters.AddWithValue("@delay", autoInjectDelay);
-            command.Parameters.AddWithValue("@updatedAt", DateTime.Now);
-            command.ExecuteNonQuery();
-          }
-        }
-        else
-        {
-          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, RecognitionSensitivity, AutoInjectDelay, CreatedAt) VALUES (@username, @style, @sensitivity, @delay, @createdAt)";
-          using (SqlCommand command = new SqlCommand(insertQuery, connection))
-          {
-            command.Parameters.AddWithValue("@username", username);
-            command.Parameters.AddWithValue("@style", "formal");
-            command.Parameters.AddWithValue("@sensitivity", sensitivity);
-            command.Parameters.AddWithValue("@delay", autoInjectDelay);
-            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
-            command.ExecuteNonQuery();
-          }
-        }
-      }
-    }
-    catch (Exception ex)
-    {
-      System.Diagnostics.Debug.WriteLine($"Failed to save recognition preferences: {ex.Message}");
       throw;
     }
   }

@@ -63,23 +63,12 @@ public partial class DashboardForm : Form
   private Label? lblOverlaySectionTitle;
   private Label? lblOverlayPosition;
   private ComboBox? cmbOverlayPosition;
-  private Label? lblOverlayOpacity;
-  private TrackBar? trackOverlayOpacity;
-  private Label? lblOverlayOpacityValue;
-  private CheckBox? chkShowOverlay;
   
   // Application Behavior
   private Label? lblApplicationSectionTitle;
-  private CheckBox? chkStartWithWindows;
   private CheckBox? chkStartMinimized;
   private CheckBox? chkMinimizeToTray;
   
-  // Speech Recognition
-  private Label? lblRecognitionSectionTitle;
-  private Label? lblRecognitionSensitivity;
-  private ComboBox? cmbRecognitionSensitivity;
-  private Label? lblAutoInjectDelay;
-  private NumericUpDown? numAutoInjectDelay;
   
   // Data Management
   private Label? lblDataSectionTitle;
@@ -289,9 +278,8 @@ public partial class DashboardForm : Form
       {
         try
         {
-          var (position, opacity, showOverlay) = databaseService.GetUserOverlayPreferences(username);
+          string position = databaseService.GetUserOverlayPosition(username);
           overlayForm.SetOverlayPosition(position);
-          overlayForm.SetOverlayOpacity(opacity);
         }
         catch
         {
@@ -418,26 +406,8 @@ public partial class DashboardForm : Form
       
       speechService.StartListening();
       
-      // Check if overlay should be shown
-      bool showOverlay = true;
-      if (databaseService != null)
-      {
-        try
-        {
-          var (_, _, show) = databaseService.GetUserOverlayPreferences(username);
-          showOverlay = show;
-        }
-        catch
-        {
-          // Use default if loading fails
-        }
-      }
-      
-      if (showOverlay)
-      {
-        overlayForm.SetState(SpeechOverlayForm.OverlayState.Listening);
-        overlayForm.Show();
-      }
+      overlayForm.SetState(SpeechOverlayForm.OverlayState.Listening);
+      overlayForm.Show();
     }
     catch (Exception ex)
     {
@@ -455,23 +425,8 @@ public partial class DashboardForm : Form
     {
       speechService.StopListening();
       
-      // Get auto-inject delay setting
-      int autoInjectDelay = 1000; // Default delay
-      if (databaseService != null)
-      {
-        try
-        {
-          var (_, delay) = databaseService.GetUserRecognitionPreferences(username);
-          autoInjectDelay = delay;
-        }
-        catch
-        {
-          // Use default if loading fails
-        }
-      }
-      
-      // Wait for recognition processing + user-defined delay
-      await Task.Delay(1000 + autoInjectDelay);
+      // Wait for recognition processing
+      await Task.Delay(1000);
       
       // Calculate duration if we have a start time
       int? duration = null;
@@ -2605,42 +2560,6 @@ public partial class DashboardForm : Form
     cmbOverlayPosition.SelectedIndex = 0; // Default to "Bottom Center"
     cmbOverlayPosition.SelectedIndexChanged += CmbOverlayPosition_SelectedIndexChanged;
     panelSettingsContent!.Controls.Add(cmbOverlayPosition);
-    currentY += itemSpacing;
-
-    lblOverlayOpacity = new Label();
-    lblOverlayOpacity.Text = "Opacity:";
-    lblOverlayOpacity.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
-    lblOverlayOpacity.ForeColor = Color.FromArgb(100, 100, 100);
-    lblOverlayOpacity.Location = new Point(40, currentY);
-    lblOverlayOpacity.AutoSize = true;
-    panelSettingsContent!.Controls.Add(lblOverlayOpacity);
-
-    trackOverlayOpacity = new TrackBar();
-    trackOverlayOpacity.Minimum = 0;
-    trackOverlayOpacity.Maximum = 100;
-    trackOverlayOpacity.TickFrequency = 10;
-    trackOverlayOpacity.Size = new Size(200, 45);
-    trackOverlayOpacity.Location = new Point(180, currentY - 5);
-    trackOverlayOpacity.ValueChanged += TrackOverlayOpacity_ValueChanged;
-    panelSettingsContent!.Controls.Add(trackOverlayOpacity);
-
-    lblOverlayOpacityValue = new Label();
-    lblOverlayOpacityValue.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
-    lblOverlayOpacityValue.ForeColor = Color.FromArgb(45, 45, 48);
-    lblOverlayOpacityValue.Location = new Point(390, currentY);
-    lblOverlayOpacityValue.AutoSize = true;
-    lblOverlayOpacityValue.Text = "100%";
-    panelSettingsContent!.Controls.Add(lblOverlayOpacityValue);
-    currentY += itemSpacing;
-
-    chkShowOverlay = new CheckBox();
-    chkShowOverlay.Text = "Show overlay";
-    chkShowOverlay.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
-    chkShowOverlay.ForeColor = Color.FromArgb(45, 45, 48);
-    chkShowOverlay.Location = new Point(40, currentY);
-    chkShowOverlay.AutoSize = true;
-    chkShowOverlay.CheckedChanged += ChkShowOverlay_CheckedChanged;
-    panelSettingsContent!.Controls.Add(chkShowOverlay);
     currentY += sectionSpacing;
 
     // ===== Application Behavior Section =====
@@ -2652,16 +2571,6 @@ public partial class DashboardForm : Form
     lblApplicationSectionTitle.AutoSize = true;
     panelSettingsContent!.Controls.Add(lblApplicationSectionTitle);
     currentY += 40;
-
-    chkStartWithWindows = new CheckBox();
-    chkStartWithWindows.Text = "Start with Windows";
-    chkStartWithWindows.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
-    chkStartWithWindows.ForeColor = Color.FromArgb(45, 45, 48);
-    chkStartWithWindows.Location = new Point(40, currentY);
-    chkStartWithWindows.AutoSize = true;
-    chkStartWithWindows.CheckedChanged += ChkStartWithWindows_CheckedChanged;
-    panelSettingsContent!.Controls.Add(chkStartWithWindows);
-    currentY += itemSpacing;
 
     chkStartMinimized = new CheckBox();
     chkStartMinimized.Text = "Start minimized";
@@ -2683,54 +2592,6 @@ public partial class DashboardForm : Form
     panelSettingsContent!.Controls.Add(chkMinimizeToTray);
     currentY += sectionSpacing;
 
-    // ===== Speech Recognition Section =====
-    lblRecognitionSectionTitle = new Label();
-    lblRecognitionSectionTitle.Text = "Speech Recognition";
-    lblRecognitionSectionTitle.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
-    lblRecognitionSectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
-    lblRecognitionSectionTitle.Location = new Point(40, currentY);
-    lblRecognitionSectionTitle.AutoSize = true;
-    panelSettingsContent!.Controls.Add(lblRecognitionSectionTitle);
-    currentY += 40;
-
-    lblRecognitionSensitivity = new Label();
-    lblRecognitionSensitivity.Text = "Sensitivity:";
-    lblRecognitionSensitivity.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
-    lblRecognitionSensitivity.ForeColor = Color.FromArgb(100, 100, 100);
-    lblRecognitionSensitivity.Location = new Point(40, currentY);
-    lblRecognitionSensitivity.AutoSize = true;
-    panelSettingsContent!.Controls.Add(lblRecognitionSensitivity);
-
-    cmbRecognitionSensitivity = new ComboBox();
-    cmbRecognitionSensitivity.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
-    cmbRecognitionSensitivity.DropDownStyle = ComboBoxStyle.DropDownList;
-    cmbRecognitionSensitivity.Size = new Size(200, 30);
-    cmbRecognitionSensitivity.Location = new Point(180, currentY - 3);
-    cmbRecognitionSensitivity.Items.AddRange(new[] { "Low", "Medium", "High" });
-    cmbRecognitionSensitivity.SelectedIndexChanged += CmbRecognitionSensitivity_SelectedIndexChanged;
-    panelSettingsContent!.Controls.Add(cmbRecognitionSensitivity);
-    currentY += itemSpacing;
-
-    lblAutoInjectDelay = new Label();
-    lblAutoInjectDelay.Text = "Auto-inject delay (ms):";
-    lblAutoInjectDelay.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
-    lblAutoInjectDelay.ForeColor = Color.FromArgb(100, 100, 100);
-    lblAutoInjectDelay.Location = new Point(40, currentY + 3);
-    lblAutoInjectDelay.AutoSize = true;
-    panelSettingsContent!.Controls.Add(lblAutoInjectDelay);
-
-    numAutoInjectDelay = new NumericUpDown();
-    numAutoInjectDelay.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
-    numAutoInjectDelay.Minimum = 0;
-    numAutoInjectDelay.Maximum = 5000;
-    numAutoInjectDelay.Increment = 100;
-    numAutoInjectDelay.Size = new Size(120, 30);
-    numAutoInjectDelay.Location = new Point(180, currentY - 3);
-    numAutoInjectDelay.BorderStyle = BorderStyle.None;
-    numAutoInjectDelay.ValueChanged += NumAutoInjectDelay_ValueChanged;
-    panelSettingsContent!.Controls.Add(numAutoInjectDelay);
-    currentY += sectionSpacing;
-
     // ===== Data Management Section =====
     lblDataSectionTitle = new Label();
     lblDataSectionTitle.Text = "Data Management";
@@ -2741,6 +2602,13 @@ public partial class DashboardForm : Form
     panelSettingsContent!.Controls.Add(lblDataSectionTitle);
     currentY += 40;
 
+    // Arrange buttons in a row with spacing
+    int buttonWidth = 180;
+    int buttonHeight = 35;
+    int buttonGap = 20;
+    int startX = 40;
+    int buttonY = currentY;
+
     btnClearSpeechHistory = new Button();
     btnClearSpeechHistory.Text = "Clear Speech History";
     btnClearSpeechHistory.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
@@ -2749,13 +2617,12 @@ public partial class DashboardForm : Form
     btnClearSpeechHistory.BackColor = Color.White;
     btnClearSpeechHistory.ForeColor = Color.FromArgb(232, 17, 35);
     btnClearSpeechHistory.Cursor = Cursors.Hand;
-    btnClearSpeechHistory.Size = new Size(180, 35);
-    btnClearSpeechHistory.Location = new Point(40, currentY);
+    btnClearSpeechHistory.Size = new Size(buttonWidth, buttonHeight);
+    btnClearSpeechHistory.Location = new Point(startX, buttonY);
     btnClearSpeechHistory.Click += BtnClearSpeechHistory_Click;
     btnClearSpeechHistory.MouseEnter += BtnClearData_MouseEnter;
     btnClearSpeechHistory.MouseLeave += BtnClearData_MouseLeave;
     panelSettingsContent!.Controls.Add(btnClearSpeechHistory);
-    currentY += itemSpacing;
 
     btnClearDictionary = new Button();
     btnClearDictionary.Text = "Clear Dictionary";
@@ -2765,13 +2632,12 @@ public partial class DashboardForm : Form
     btnClearDictionary.BackColor = Color.White;
     btnClearDictionary.ForeColor = Color.FromArgb(232, 17, 35);
     btnClearDictionary.Cursor = Cursors.Hand;
-    btnClearDictionary.Size = new Size(180, 35);
-    btnClearDictionary.Location = new Point(40, currentY);
+    btnClearDictionary.Size = new Size(buttonWidth, buttonHeight);
+    btnClearDictionary.Location = new Point(startX + buttonWidth + buttonGap, buttonY);
     btnClearDictionary.Click += BtnClearDictionary_Click;
     btnClearDictionary.MouseEnter += BtnClearData_MouseEnter;
     btnClearDictionary.MouseLeave += BtnClearData_MouseLeave;
     panelSettingsContent!.Controls.Add(btnClearDictionary);
-    currentY += itemSpacing;
 
     btnClearSnippets = new Button();
     btnClearSnippets.Text = "Clear Snippets";
@@ -2781,13 +2647,12 @@ public partial class DashboardForm : Form
     btnClearSnippets.BackColor = Color.White;
     btnClearSnippets.ForeColor = Color.FromArgb(232, 17, 35);
     btnClearSnippets.Cursor = Cursors.Hand;
-    btnClearSnippets.Size = new Size(180, 35);
-    btnClearSnippets.Location = new Point(40, currentY);
+    btnClearSnippets.Size = new Size(buttonWidth, buttonHeight);
+    btnClearSnippets.Location = new Point(startX + (buttonWidth + buttonGap) * 2, buttonY);
     btnClearSnippets.Click += BtnClearSnippets_Click;
     btnClearSnippets.MouseEnter += BtnClearData_MouseEnter;
     btnClearSnippets.MouseLeave += BtnClearData_MouseLeave;
     panelSettingsContent!.Controls.Add(btnClearSnippets);
-    currentY += itemSpacing;
 
     btnExportData = new Button();
     btnExportData.Text = "Export Data";
@@ -2797,13 +2662,13 @@ public partial class DashboardForm : Form
     btnExportData.BackColor = Color.FromArgb(45, 45, 48);
     btnExportData.ForeColor = Color.White;
     btnExportData.Cursor = Cursors.Hand;
-    btnExportData.Size = new Size(180, 35);
-    btnExportData.Location = new Point(40, currentY);
+    btnExportData.Size = new Size(buttonWidth, buttonHeight);
+    btnExportData.Location = new Point(startX + (buttonWidth + buttonGap) * 3, buttonY);
     btnExportData.Click += BtnExportData_Click;
     btnExportData.MouseEnter += BtnExportData_MouseEnter;
     btnExportData.MouseLeave += BtnExportData_MouseLeave;
     panelSettingsContent!.Controls.Add(btnExportData);
-    currentY += btnExportData.Height + itemSpacing;
+    currentY += buttonHeight + itemSpacing;
 
     // Set content panel height based on content
     panelSettingsContent.AutoScrollMinSize = new Size(0, currentY + 50); // Add bottom padding
@@ -3214,7 +3079,6 @@ public partial class DashboardForm : Form
     LoadMicrophoneSettings();
     LoadOverlaySettings();
     LoadApplicationSettings();
-    LoadRecognitionSettings();
   }
 
   // Microphone Settings
@@ -3295,12 +3159,12 @@ public partial class DashboardForm : Form
   // Overlay Settings
   private void LoadOverlaySettings()
   {
-    if (databaseService == null || cmbOverlayPosition == null || trackOverlayOpacity == null || chkShowOverlay == null || overlayForm == null)
+    if (databaseService == null || cmbOverlayPosition == null || overlayForm == null)
       return;
 
     try
     {
-      var (position, opacity, showOverlay) = databaseService.GetUserOverlayPreferences(username);
+      string position = databaseService.GetUserOverlayPosition(username);
       
       // Set position
       string positionDisplay = position switch
@@ -3317,17 +3181,8 @@ public partial class DashboardForm : Form
       if (cmbOverlayPosition.SelectedIndex == -1)
         cmbOverlayPosition.SelectedIndex = 0;
       
-      // Set opacity
-      trackOverlayOpacity.Value = opacity;
-      if (lblOverlayOpacityValue != null)
-        lblOverlayOpacityValue.Text = $"{opacity}%";
-      
-      // Set show overlay
-      chkShowOverlay.Checked = showOverlay;
-      
       // Apply to overlay form
       overlayForm.SetOverlayPosition(position);
-      overlayForm.SetOverlayOpacity(opacity);
     }
     catch (Exception ex)
     {
@@ -3353,11 +3208,8 @@ public partial class DashboardForm : Form
         _ => "bottom_center"
       };
 
-      if (trackOverlayOpacity != null && chkShowOverlay != null)
-      {
-        databaseService.SaveUserOverlayPreferences(username, position, trackOverlayOpacity.Value, chkShowOverlay.Checked);
-        overlayForm.SetOverlayPosition(position);
-      }
+      databaseService.SaveUserOverlayPosition(username, position);
+      overlayForm.SetOverlayPosition(position);
     }
     catch (Exception ex)
     {
@@ -3366,116 +3218,22 @@ public partial class DashboardForm : Form
     }
   }
 
-  private void TrackOverlayOpacity_ValueChanged(object? sender, EventArgs e)
-  {
-    if (trackOverlayOpacity == null || databaseService == null || overlayForm == null)
-      return;
-
-    try
-    {
-      int opacity = trackOverlayOpacity.Value;
-      if (lblOverlayOpacityValue != null)
-        lblOverlayOpacityValue.Text = $"{opacity}%";
-
-      if (cmbOverlayPosition != null && chkShowOverlay != null)
-      {
-        string position = cmbOverlayPosition.SelectedItem?.ToString() ?? "Bottom Center";
-        string positionValue = position switch
-        {
-          "Top Center" => "top_center",
-          "Top Left" => "top_left",
-          "Top Right" => "top_right",
-          "Bottom Left" => "bottom_left",
-          "Bottom Right" => "bottom_right",
-          _ => "bottom_center"
-        };
-        databaseService.SaveUserOverlayPreferences(username, positionValue, opacity, chkShowOverlay.Checked);
-        overlayForm.SetOverlayOpacity(opacity);
-      }
-    }
-    catch (Exception ex)
-    {
-      MessageBox.Show($"Failed to save overlay opacity: {ex.Message}", "Error",
-        MessageBoxButtons.OK, MessageBoxIcon.Error);
-    }
-  }
-
-  private void ChkShowOverlay_CheckedChanged(object? sender, EventArgs e)
-  {
-    if (chkShowOverlay == null || databaseService == null)
-      return;
-
-    try
-    {
-      if (cmbOverlayPosition != null && trackOverlayOpacity != null)
-      {
-        string position = cmbOverlayPosition.SelectedItem?.ToString() ?? "Bottom Center";
-        string positionValue = position switch
-        {
-          "Top Center" => "top_center",
-          "Top Left" => "top_left",
-          "Top Right" => "top_right",
-          "Bottom Left" => "bottom_left",
-          "Bottom Right" => "bottom_right",
-          _ => "bottom_center"
-        };
-        databaseService.SaveUserOverlayPreferences(username, positionValue, trackOverlayOpacity.Value, chkShowOverlay.Checked);
-      }
-    }
-    catch (Exception ex)
-    {
-      MessageBox.Show($"Failed to save overlay visibility: {ex.Message}", "Error",
-        MessageBoxButtons.OK, MessageBoxIcon.Error);
-    }
-  }
-
   // Application Settings
   private void LoadApplicationSettings()
   {
-    if (databaseService == null || chkStartWithWindows == null || chkStartMinimized == null || chkMinimizeToTray == null)
+    if (databaseService == null || chkStartMinimized == null || chkMinimizeToTray == null)
       return;
 
     try
     {
-      var (startWithWindows, startMinimized, minimizeToTray) = databaseService.GetUserApplicationPreferences(username);
+      var (startMinimized, minimizeToTray) = databaseService.GetUserApplicationPreferences(username);
       
-      chkStartWithWindows.Checked = startWithWindows;
       chkStartMinimized.Checked = startMinimized;
       chkMinimizeToTray.Checked = minimizeToTray;
-      
-      // Sync with registry
-      bool registryStartup = StartupManager.IsStartupEnabled();
-      if (startWithWindows != registryStartup)
-      {
-        StartupManager.SetStartup(startWithWindows);
-      }
     }
     catch (Exception ex)
     {
       System.Diagnostics.Debug.WriteLine($"Failed to load application settings: {ex.Message}");
-    }
-  }
-
-  private void ChkStartWithWindows_CheckedChanged(object? sender, EventArgs e)
-  {
-    if (chkStartWithWindows == null || databaseService == null)
-      return;
-
-    try
-    {
-      bool startWithWindows = chkStartWithWindows.Checked;
-      StartupManager.SetStartup(startWithWindows);
-      
-      if (chkStartMinimized != null && chkMinimizeToTray != null)
-      {
-        databaseService.SaveUserApplicationPreferences(username, startWithWindows, chkStartMinimized.Checked, chkMinimizeToTray.Checked);
-      }
-    }
-    catch (Exception ex)
-    {
-      MessageBox.Show($"Failed to save startup setting: {ex.Message}", "Error",
-        MessageBoxButtons.OK, MessageBoxIcon.Error);
-      chkStartWithWindows.Checked = !chkStartWithWindows.Checked; // Revert
     }
   }
 
@@ -3486,9 +3244,9 @@ public partial class DashboardForm : Form
 
     try
     {
-      if (chkStartWithWindows != null && chkMinimizeToTray != null)
+      if (chkMinimizeToTray != null)
       {
-        databaseService.SaveUserApplicationPreferences(username, chkStartWithWindows.Checked, chkStartMinimized.Checked, chkMinimizeToTray.Checked);
+        databaseService.SaveUserApplicationPreferences(username, chkStartMinimized.Checked, chkMinimizeToTray.Checked);
       }
     }
     catch (Exception ex)
@@ -3505,70 +3263,14 @@ public partial class DashboardForm : Form
 
     try
     {
-      if (chkStartWithWindows != null && chkStartMinimized != null)
+      if (chkStartMinimized != null)
       {
-        databaseService.SaveUserApplicationPreferences(username, chkStartWithWindows.Checked, chkStartMinimized.Checked, chkMinimizeToTray.Checked);
+        databaseService.SaveUserApplicationPreferences(username, chkStartMinimized.Checked, chkMinimizeToTray.Checked);
       }
     }
     catch (Exception ex)
     {
       MessageBox.Show($"Failed to save minimize to tray setting: {ex.Message}", "Error",
-        MessageBoxButtons.OK, MessageBoxIcon.Error);
-    }
-  }
-
-  // Recognition Settings
-  private void LoadRecognitionSettings()
-  {
-    if (databaseService == null || cmbRecognitionSensitivity == null || numAutoInjectDelay == null)
-      return;
-
-    try
-    {
-      var (sensitivity, delay) = databaseService.GetUserRecognitionPreferences(username);
-      
-      cmbRecognitionSensitivity.SelectedItem = sensitivity.Substring(0, 1).ToUpper() + sensitivity.Substring(1);
-      numAutoInjectDelay.Value = delay;
-    }
-    catch (Exception ex)
-    {
-      System.Diagnostics.Debug.WriteLine($"Failed to load recognition settings: {ex.Message}");
-    }
-  }
-
-  private void CmbRecognitionSensitivity_SelectedIndexChanged(object? sender, EventArgs e)
-  {
-    if (cmbRecognitionSensitivity == null || databaseService == null)
-      return;
-
-    try
-    {
-      string selected = cmbRecognitionSensitivity?.SelectedItem?.ToString()?.ToLower() ?? "medium";
-      if (numAutoInjectDelay != null && databaseService != null)
-      {
-        databaseService.SaveUserRecognitionPreferences(username, selected, (int)numAutoInjectDelay.Value);
-      }
-    }
-    catch (Exception ex)
-    {
-      MessageBox.Show($"Failed to save recognition sensitivity: {ex.Message}", "Error",
-        MessageBoxButtons.OK, MessageBoxIcon.Error);
-    }
-  }
-
-  private void NumAutoInjectDelay_ValueChanged(object? sender, EventArgs e)
-  {
-    if (numAutoInjectDelay == null || databaseService == null)
-      return;
-
-    try
-    {
-      string sensitivity = cmbRecognitionSensitivity?.SelectedItem?.ToString()?.ToLower() ?? "medium";
-      databaseService.SaveUserRecognitionPreferences(username, sensitivity, (int)numAutoInjectDelay.Value);
-    }
-    catch (Exception ex)
-    {
-      MessageBox.Show($"Failed to save auto-inject delay: {ex.Message}", "Error",
         MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
   }
