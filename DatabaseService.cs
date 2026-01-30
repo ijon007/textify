@@ -787,4 +787,189 @@ public class DatabaseService
       throw;
     }
   }
+
+  public (bool ctrl, bool alt, bool shift, bool win, int? keyCode) GetUserHotkeyPreference(string username)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      return (ctrl: true, alt: false, shift: false, win: true, keyCode: null); // Default: Ctrl+Win
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        
+        // Check if columns exist first (for backward compatibility)
+        string checkColumnsQuery = @"
+          SELECT COLUMN_NAME 
+          FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_NAME = 'UserSettings' 
+            AND COLUMN_NAME IN ('HotkeyModifiers', 'HotkeyKeyCode')";
+        
+        var existingColumns = new HashSet<string>();
+        using (SqlCommand checkCmd = new SqlCommand(checkColumnsQuery, connection))
+        {
+          using (SqlDataReader reader = checkCmd.ExecuteReader())
+          {
+            while (reader.Read())
+            {
+              existingColumns.Add(reader.GetString(0));
+            }
+          }
+        }
+
+        // If columns don't exist, return default
+        if (!existingColumns.Contains("HotkeyModifiers") || !existingColumns.Contains("HotkeyKeyCode"))
+        {
+          return (ctrl: true, alt: false, shift: false, win: true, keyCode: null); // Default: Ctrl+Win
+        }
+        
+        string query = "SELECT HotkeyModifiers, HotkeyKeyCode FROM UserSettings WHERE Username = @username";
+        
+        using (SqlCommand command = new SqlCommand(query, connection))
+        {
+          command.Parameters.AddWithValue("@username", username);
+          
+          using (SqlDataReader reader = command.ExecuteReader())
+          {
+            if (reader.Read())
+            {
+              bool ctrl = false, alt = false, shift = false, win = false;
+              int? keyCode = null;
+
+              if (!reader.IsDBNull(0))
+              {
+                string modifiers = reader.GetString(0);
+                if (modifiers.Contains("Ctrl")) ctrl = true;
+                if (modifiers.Contains("Alt")) alt = true;
+                if (modifiers.Contains("Shift")) shift = true;
+                if (modifiers.Contains("Win")) win = true;
+              }
+
+              if (!reader.IsDBNull(1))
+              {
+                keyCode = reader.GetInt32(1);
+              }
+
+              // If no modifiers found, return default
+              if (!ctrl && !alt && !shift && !win)
+              {
+                return (ctrl: true, alt: false, shift: false, win: true, keyCode: null);
+              }
+
+              return (ctrl, alt, shift, win, keyCode);
+            }
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to get user hotkey preference: {ex.Message}");
+    }
+
+    return (ctrl: true, alt: false, shift: false, win: true, keyCode: null); // Default: Ctrl+Win
+  }
+
+  public void SaveUserHotkeyPreference(string username, bool ctrl, bool alt, bool shift, bool win, int? keyCode)
+  {
+    if (string.IsNullOrWhiteSpace(username))
+      throw new ArgumentException("Username cannot be empty.");
+
+    // Build modifiers string
+    var modifierParts = new List<string>();
+    if (ctrl) modifierParts.Add("Ctrl");
+    if (alt) modifierParts.Add("Alt");
+    if (shift) modifierParts.Add("Shift");
+    if (win) modifierParts.Add("Win");
+    
+    string modifiers = string.Join("+", modifierParts);
+    
+    if (string.IsNullOrEmpty(modifiers))
+      throw new ArgumentException("At least one modifier key (Ctrl, Alt, Shift, or Win) must be selected.");
+
+    try
+    {
+      using (SqlConnection connection = new SqlConnection(connectionString))
+      {
+        connection.Open();
+        
+        // Check if columns exist first (for backward compatibility)
+        string checkColumnsQuery = @"
+          SELECT COLUMN_NAME 
+          FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_NAME = 'UserSettings' 
+            AND COLUMN_NAME IN ('HotkeyModifiers', 'HotkeyKeyCode')";
+        
+        var existingColumns = new HashSet<string>();
+        using (SqlCommand checkCmd = new SqlCommand(checkColumnsQuery, connection))
+        {
+          using (SqlDataReader reader = checkCmd.ExecuteReader())
+          {
+            while (reader.Read())
+            {
+              existingColumns.Add(reader.GetString(0));
+            }
+          }
+        }
+
+        // If columns don't exist, throw helpful error
+        if (!existingColumns.Contains("HotkeyModifiers") || !existingColumns.Contains("HotkeyKeyCode"))
+        {
+          throw new InvalidOperationException(
+            "Database schema is missing HotkeyModifiers and HotkeyKeyCode columns. " +
+            "Please run the migration script (database_migration.sql) to add these columns to the UserSettings table.");
+        }
+        
+        // Check if preference already exists
+        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
+        bool exists = false;
+        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
+        {
+          checkCommand.Parameters.AddWithValue("@username", username);
+          int count = (int)checkCommand.ExecuteScalar();
+          exists = count > 0;
+        }
+        
+        if (exists)
+        {
+          // Update existing preference
+          string updateQuery = "UPDATE UserSettings SET HotkeyModifiers = @modifiers, HotkeyKeyCode = @keyCode, UpdatedAt = @updatedAt WHERE Username = @username";
+          using (SqlCommand command = new SqlCommand(updateQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@modifiers", modifiers);
+            if (keyCode.HasValue)
+              command.Parameters.AddWithValue("@keyCode", keyCode.Value);
+            else
+              command.Parameters.AddWithValue("@keyCode", DBNull.Value);
+            command.Parameters.AddWithValue("@updatedAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+        else
+        {
+          // Insert new preference (include StylePreference with default if needed)
+          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, HotkeyModifiers, HotkeyKeyCode, CreatedAt) VALUES (@username, @style, @modifiers, @keyCode, @createdAt)";
+          using (SqlCommand command = new SqlCommand(insertQuery, connection))
+          {
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@style", "formal"); // Default style preference
+            command.Parameters.AddWithValue("@modifiers", modifiers);
+            if (keyCode.HasValue)
+              command.Parameters.AddWithValue("@keyCode", keyCode.Value);
+            else
+              command.Parameters.AddWithValue("@keyCode", DBNull.Value);
+            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
+            command.ExecuteNonQuery();
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to save user hotkey preference: {ex.Message}");
+      throw;
+    }
+  }
 }

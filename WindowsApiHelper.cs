@@ -18,6 +18,9 @@ public static class WindowsApiHelper
   [DllImport("user32.dll")]
   public static extern bool SetForegroundWindow(IntPtr hWnd);
 
+  [DllImport("user32.dll")]
+  public static extern short GetAsyncKeyState(int vKey);
+
   // SendInput for text injection
   [DllImport("user32.dll", SetLastError = true)]
   public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);

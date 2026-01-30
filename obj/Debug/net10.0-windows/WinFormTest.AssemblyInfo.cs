@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WinFormTest")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3629dff61a464bb73eb017208cf358dcbd40a0c9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ae3dbb7468fa4f43833b98bf8968ed5577bf8b36")]
 [assembly: System.Reflection.AssemblyProductAttribute("WinFormTest")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WinFormTest")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

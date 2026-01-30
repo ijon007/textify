@@ -1,11 +1,11 @@
 # TODO
 
 ## In Progress
+- **Settings Page** (panelSettingsPage) - general user settings, change push to talk shortcut etc (will have to think)
 - 
 
 ## Pending
 ### Pages to Build
-- **Settings Page** (panelSettingsPage) - general user settings, change push to talk shortcut etc (will have to think)
 
 ### Other
 - **Add whisper voice model**

@@ -40,6 +40,14 @@ public partial class DashboardForm : Form
   private ClippingPanel? panelVeryCasualCard;
   private string? selectedStylePreference;
 
+  // Settings page components
+  private Label? lblSettingsTitle;
+  private Label? lblHotkeySectionTitle;
+  private Label? lblCurrentHotkey;
+  private Label? lblCurrentHotkeyValue;
+  private Button? btnChangeHotkey;
+  private Label? lblHotkeyDescription;
+
   public DashboardForm(string username)
   {
     this.username = username;
@@ -205,6 +213,10 @@ public partial class DashboardForm : Form
       hotkeyManager = new GlobalHotkeyManager(this.Handle);
       hotkeyManager.HotkeyPressed += HotkeyManager_HotkeyPressed;
       hotkeyManager.HotkeyReleased += HotkeyManager_HotkeyReleased;
+      
+      // Load and apply saved hotkey preference
+      LoadAndApplyHotkeyPreference();
+      
       hotkeyManager.InstallKeyboardHook();
 
       // Initialize overlay form
@@ -245,6 +257,24 @@ public partial class DashboardForm : Form
     else if (loadingLabel != null)
     {
       loadingLabel.Text = text;
+    }
+  }
+
+  private void LoadAndApplyHotkeyPreference()
+  {
+    if (databaseService == null || hotkeyManager == null)
+      return;
+
+    try
+    {
+      var (ctrl, alt, shift, win, keyCode) = databaseService.GetUserHotkeyPreference(username);
+      hotkeyManager.SetHotkeyConfiguration(ctrl, alt, shift, win, keyCode);
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to load hotkey preference: {ex.Message}");
+      // Use default Ctrl+Win if loading fails
+      hotkeyManager.SetHotkeyConfiguration(true, false, false, true, null);
     }
   }
 
@@ -788,8 +818,8 @@ public partial class DashboardForm : Form
     // Set up Style page with full functionality
     InitializeStylePage();
     
-    // Set up placeholder content for other pages
-    CreatePlaceholderPage(panelSettingsPage, "Settings");
+    // Set up Settings page with full functionality
+    InitializeSettingsPage();
     
     // Initially hide all pages except Home
     panelDictionaryPage.Visible = false;
@@ -2298,5 +2328,435 @@ public partial class DashboardForm : Form
     panelFormalCard.Location = new Point(startX, cardsTop);
     panelCasualCard.Location = new Point(startX + cardWidth + cardSpacing, cardsTop);
     panelVeryCasualCard.Location = new Point(startX + (cardWidth + cardSpacing) * 2, cardsTop);
+  }
+
+  // Settings Page Methods
+
+  private void InitializeSettingsPage()
+  {
+    panelSettingsPage.BackColor = Color.White;
+    panelSettingsPage.Dock = DockStyle.Fill;
+    panelSettingsPage.Padding = new Padding(40, 60, 40, 50);
+
+    // Page Title
+    lblSettingsTitle = new Label();
+    lblSettingsTitle.Text = "Settings";
+    lblSettingsTitle.Font = new Font("Segoe UI", 24F, FontStyle.Bold, GraphicsUnit.Point);
+    lblSettingsTitle.ForeColor = Color.FromArgb(45, 45, 48);
+    lblSettingsTitle.Location = new Point(40, 60);
+    lblSettingsTitle.AutoSize = true;
+    lblSettingsTitle.Name = "lblSettingsTitle";
+
+    // Hotkey Section Title
+    lblHotkeySectionTitle = new Label();
+    lblHotkeySectionTitle.Text = "Push-to-Talk Shortcut";
+    lblHotkeySectionTitle.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+    lblHotkeySectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
+    lblHotkeySectionTitle.Location = new Point(40, 130);
+    lblHotkeySectionTitle.AutoSize = true;
+    lblHotkeySectionTitle.Name = "lblHotkeySectionTitle";
+
+    // Current Hotkey Label
+    lblCurrentHotkey = new Label();
+    lblCurrentHotkey.Text = "Current shortcut:";
+    lblCurrentHotkey.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    lblCurrentHotkey.ForeColor = Color.FromArgb(100, 100, 100);
+    lblCurrentHotkey.Location = new Point(40, 170);
+    lblCurrentHotkey.AutoSize = true;
+    lblCurrentHotkey.Name = "lblCurrentHotkey";
+
+    // Current Hotkey Value
+    lblCurrentHotkeyValue = new Label();
+    lblCurrentHotkeyValue.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    lblCurrentHotkeyValue.ForeColor = Color.FromArgb(45, 45, 48);
+    lblCurrentHotkeyValue.Location = new Point(180, 170);
+    lblCurrentHotkeyValue.AutoSize = true;
+    lblCurrentHotkeyValue.Name = "lblCurrentHotkeyValue";
+
+    // Change Hotkey Button
+    btnChangeHotkey = new Button();
+    btnChangeHotkey.Text = "Change shortcut";
+    btnChangeHotkey.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    btnChangeHotkey.FlatStyle = FlatStyle.Flat;
+    btnChangeHotkey.FlatAppearance.BorderSize = 0;
+    btnChangeHotkey.BackColor = Color.FromArgb(45, 45, 48);
+    btnChangeHotkey.ForeColor = Color.White;
+    btnChangeHotkey.Cursor = Cursors.Hand;
+    btnChangeHotkey.Size = new Size(140, 35);
+    btnChangeHotkey.Location = new Point(40, 210);
+    btnChangeHotkey.Name = "btnChangeHotkey";
+    btnChangeHotkey.Click += BtnChangeHotkey_Click;
+    btnChangeHotkey.MouseEnter += BtnChangeHotkey_MouseEnter;
+    btnChangeHotkey.MouseLeave += BtnChangeHotkey_MouseLeave;
+
+    // Description Label
+    lblHotkeyDescription = new Label();
+    lblHotkeyDescription.Text = "Hold the shortcut keys to start dictating. Release to stop and inject text.";
+    lblHotkeyDescription.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
+    lblHotkeyDescription.ForeColor = Color.FromArgb(100, 100, 100);
+    lblHotkeyDescription.Location = new Point(40, 260);
+    lblHotkeyDescription.AutoSize = true;
+    lblHotkeyDescription.Name = "lblHotkeyDescription";
+    lblHotkeyDescription.MaximumSize = new Size(600, 0);
+
+    // Add controls to settings page
+    panelSettingsPage.Controls.Add(lblSettingsTitle);
+    panelSettingsPage.Controls.Add(lblHotkeySectionTitle);
+    panelSettingsPage.Controls.Add(lblCurrentHotkey);
+    panelSettingsPage.Controls.Add(lblCurrentHotkeyValue);
+    panelSettingsPage.Controls.Add(btnChangeHotkey);
+    panelSettingsPage.Controls.Add(lblHotkeyDescription);
+
+    // Load and display current hotkey
+    LoadAndDisplayHotkey();
+
+    // Handle resize
+    panelSettingsPage.Resize += PanelSettingsPage_Resize;
+  }
+
+  private void PanelSettingsPage_Resize(object? sender, EventArgs e)
+  {
+    // Settings page layout is simple and doesn't need complex resize logic
+    // But we can ensure description label doesn't overflow
+    if (lblHotkeyDescription != null && panelSettingsPage != null)
+    {
+      int maxWidth = panelSettingsPage.ClientSize.Width - 80; // Account for padding
+      lblHotkeyDescription.MaximumSize = new Size(maxWidth, 0);
+    }
+  }
+
+  private void LoadAndDisplayHotkey()
+  {
+    if (databaseService == null || lblCurrentHotkeyValue == null)
+      return;
+
+    try
+    {
+      var (ctrl, alt, shift, win, keyCode) = databaseService.GetUserHotkeyPreference(username);
+      string hotkeyDisplay = FormatHotkeyDisplay(ctrl, alt, shift, win, keyCode);
+      lblCurrentHotkeyValue.Text = hotkeyDisplay;
+    }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to load hotkey preference: {ex.Message}");
+      lblCurrentHotkeyValue.Text = "Ctrl + Win";
+    }
+  }
+
+  private string FormatHotkeyDisplay(bool ctrl, bool alt, bool shift, bool win, int? keyCode)
+  {
+    var parts = new List<string>();
+    if (ctrl) parts.Add("Ctrl");
+    if (alt) parts.Add("Alt");
+    if (shift) parts.Add("Shift");
+    if (win) parts.Add("Win");
+    if (keyCode.HasValue)
+    {
+      // Convert key code to readable name
+      string keyName = GetKeyName(keyCode.Value);
+      if (!string.IsNullOrEmpty(keyName))
+        parts.Add(keyName);
+    }
+    return string.Join(" + ", parts);
+  }
+
+  private string GetKeyName(int keyCode)
+  {
+    // Common key codes
+    return keyCode switch
+    {
+      0x20 => "Space",
+      0x0D => "Enter",
+      0x1B => "Esc",
+      0x08 => "Backspace",
+      0x09 => "Tab",
+      >= 0x30 and <= 0x39 => ((char)keyCode).ToString(), // 0-9
+      >= 0x41 and <= 0x5A => ((char)keyCode).ToString(), // A-Z
+      _ => $"Key{keyCode}"
+    };
+  }
+
+  private void BtnChangeHotkey_Click(object? sender, EventArgs e)
+  {
+    ShowHotkeyCaptureDialog();
+  }
+
+  private void BtnChangeHotkey_MouseEnter(object? sender, EventArgs e)
+  {
+    if (sender is Button btn)
+    {
+      btn.BackColor = Color.FromArgb(35, 35, 38);
+    }
+  }
+
+  private void BtnChangeHotkey_MouseLeave(object? sender, EventArgs e)
+  {
+    if (sender is Button btn)
+    {
+      btn.BackColor = Color.FromArgb(45, 45, 48);
+    }
+  }
+
+  private void ShowHotkeyCaptureDialog()
+  {
+    if (databaseService == null)
+      return;
+
+    // Create backdrop overlay Form (separate window)
+    Form backdrop = new Form();
+    backdrop.FormBorderStyle = FormBorderStyle.None;
+    backdrop.WindowState = FormWindowState.Normal;
+    backdrop.StartPosition = FormStartPosition.Manual;
+    backdrop.Size = this.Size;
+    backdrop.Location = this.Location;
+    backdrop.BackColor = Color.Black;
+    backdrop.Opacity = 0.5;
+    backdrop.ShowInTaskbar = false;
+    backdrop.TopMost = true;
+    backdrop.Enabled = true;
+
+    // Create a Form-based dialog styled like TaskDialog
+    Form dialog = new Form();
+    dialog.Text = "";
+    dialog.FormBorderStyle = FormBorderStyle.None;
+    dialog.Size = new Size(500, 250);
+    dialog.StartPosition = FormStartPosition.CenterParent;
+    dialog.BackColor = Color.White;
+    dialog.ShowInTaskbar = false;
+    dialog.TopMost = true;
+    
+    // Set backdrop click handler to close dialog
+    backdrop.Click += (s, e) => dialog.DialogResult = DialogResult.Cancel;
+
+    // Show backdrop first, then dialog
+    backdrop.Show();
+    backdrop.BringToFront();
+    dialog.BringToFront();
+
+    // Title label
+    Label lblTitle = new Label();
+    lblTitle.Text = "Change Push-to-Talk Shortcut";
+    lblTitle.Font = new Font("Segoe UI", 16F, FontStyle.Bold, GraphicsUnit.Point);
+    lblTitle.ForeColor = Color.FromArgb(45, 45, 48);
+    lblTitle.Location = new Point(20, 20);
+    lblTitle.AutoSize = true;
+
+    // Close button
+    Button btnClose = new Button();
+    btnClose.Text = "×";
+    btnClose.Font = new Font("Segoe UI", 18F, FontStyle.Regular, GraphicsUnit.Point);
+    btnClose.FlatStyle = FlatStyle.Flat;
+    btnClose.FlatAppearance.BorderSize = 0;
+    btnClose.BackColor = Color.Transparent;
+    btnClose.ForeColor = Color.FromArgb(100, 100, 100);
+    btnClose.Size = new Size(30, 30);
+    btnClose.Location = new Point(460, 10);
+    btnClose.Cursor = Cursors.Hand;
+    btnClose.TextAlign = ContentAlignment.MiddleCenter;
+    btnClose.Click += (s, e) => dialog.DialogResult = DialogResult.Cancel;
+    btnClose.MouseEnter += (s, e) => { btnClose.ForeColor = Color.FromArgb(45, 45, 48); btnClose.BackColor = Color.FromArgb(245, 245, 245); };
+    btnClose.MouseLeave += (s, e) => { btnClose.ForeColor = Color.FromArgb(100, 100, 100); btnClose.BackColor = Color.Transparent; };
+
+    // Instructions label
+    Label lblInstructions = new Label();
+    lblInstructions.Text = "Press the key combination you want to use:";
+    lblInstructions.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
+    lblInstructions.ForeColor = Color.FromArgb(100, 100, 100);
+    lblInstructions.Location = new Point(20, 60);
+    lblInstructions.AutoSize = true;
+
+    // Display area for captured keys
+    Label lblHotkeyDisplay = new Label();
+    lblHotkeyDisplay.Text = "Press keys...";
+    lblHotkeyDisplay.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+    lblHotkeyDisplay.ForeColor = Color.FromArgb(45, 45, 48);
+    lblHotkeyDisplay.Location = new Point(20, 90);
+    lblHotkeyDisplay.AutoSize = true;
+    lblHotkeyDisplay.Size = new Size(460, 30);
+    lblHotkeyDisplay.TextAlign = ContentAlignment.MiddleLeft;
+
+    // Warning label
+    Label lblWarning = new Label();
+    lblWarning.Text = "At least one modifier key (Ctrl, Alt, Shift, or Win) must be pressed.";
+    lblWarning.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+    lblWarning.ForeColor = Color.FromArgb(100, 100, 100);
+    lblWarning.Location = new Point(20, 130);
+    lblWarning.AutoSize = true;
+    lblWarning.MaximumSize = new Size(460, 0);
+
+    // Cancel button
+    Button btnCancel = new Button();
+    btnCancel.Text = "Cancel";
+    btnCancel.Location = new Point(290, 180);
+    btnCancel.Size = new Size(80, 28);
+    btnCancel.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    btnCancel.FlatStyle = FlatStyle.Flat;
+    btnCancel.FlatAppearance.BorderSize = 0;
+    btnCancel.BackColor = Color.FromArgb(235, 235, 235);
+    btnCancel.ForeColor = Color.FromArgb(45, 45, 48);
+    btnCancel.Cursor = Cursors.Hand;
+    btnCancel.DialogResult = DialogResult.Cancel;
+    btnCancel.TextAlign = ContentAlignment.MiddleCenter;
+    btnCancel.MouseEnter += (s, e) => btnCancel.BackColor = Color.FromArgb(220, 220, 220);
+    btnCancel.MouseLeave += (s, e) => btnCancel.BackColor = Color.FromArgb(235, 235, 235);
+
+    // Save button
+    Button btnSave = new Button();
+    btnSave.Text = "Save";
+    btnSave.Location = new Point(380, 180);
+    btnSave.Size = new Size(100, 28);
+    btnSave.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+    btnSave.FlatStyle = FlatStyle.Flat;
+    btnSave.FlatAppearance.BorderSize = 0;
+    btnSave.BackColor = Color.FromArgb(45, 45, 48);
+    btnSave.ForeColor = Color.White;
+    btnSave.Cursor = Cursors.Hand;
+    btnSave.DialogResult = DialogResult.OK;
+    btnSave.TextAlign = ContentAlignment.MiddleCenter;
+    btnSave.MouseEnter += (s, e) => btnSave.BackColor = Color.FromArgb(35, 35, 38);
+    btnSave.MouseLeave += (s, e) => btnSave.BackColor = Color.FromArgb(45, 45, 48);
+    btnSave.Enabled = false; // Disabled until valid combination is captured
+
+    // Add controls
+    dialog.Controls.Add(lblTitle);
+    dialog.Controls.Add(btnClose);
+    dialog.Controls.Add(lblInstructions);
+    dialog.Controls.Add(lblHotkeyDisplay);
+    dialog.Controls.Add(lblWarning);
+    dialog.Controls.Add(btnCancel);
+    dialog.Controls.Add(btnSave);
+
+    // Draw square border
+    dialog.Paint += (s, e) =>
+    {
+      using (Pen pen = new Pen(Color.FromArgb(200, 200, 200), 1))
+      {
+        Rectangle rect = new Rectangle(0, 0, dialog.Width - 1, dialog.Height - 1);
+        e.Graphics.DrawRectangle(pen, rect);
+      }
+    };
+
+    // Key capture variables
+    bool ctrlPressed = false;
+    bool altPressed = false;
+    bool shiftPressed = false;
+    bool winPressed = false;
+    int? capturedKeyCode = null;
+
+    // Timer to poll key states (for Win key detection)
+    System.Windows.Forms.Timer keyPollTimer = new System.Windows.Forms.Timer();
+    keyPollTimer.Interval = 50; // Check every 50ms
+    keyPollTimer.Tick += (s, e) =>
+    {
+      // Use GetAsyncKeyState for accurate key detection (especially Win key)
+      ctrlPressed = (WindowsApiHelper.GetAsyncKeyState(0xA2) & 0x8000) != 0 || 
+                    (WindowsApiHelper.GetAsyncKeyState(0xA3) & 0x8000) != 0;
+      altPressed = (WindowsApiHelper.GetAsyncKeyState(0xA4) & 0x8000) != 0 || 
+                   (WindowsApiHelper.GetAsyncKeyState(0xA5) & 0x8000) != 0;
+      shiftPressed = (WindowsApiHelper.GetAsyncKeyState(0xA0) & 0x8000) != 0 || 
+                     (WindowsApiHelper.GetAsyncKeyState(0xA1) & 0x8000) != 0;
+      winPressed = (WindowsApiHelper.GetAsyncKeyState(0x5B) & 0x8000) != 0 || 
+                   (WindowsApiHelper.GetAsyncKeyState(0x5C) & 0x8000) != 0;
+
+      UpdateHotkeyDisplay(lblHotkeyDisplay, ctrlPressed, altPressed, shiftPressed, winPressed, capturedKeyCode);
+      
+      bool hasModifier = ctrlPressed || altPressed || shiftPressed || winPressed;
+      btnSave.Enabled = hasModifier;
+    };
+    keyPollTimer.Start();
+
+    // Key capture logic
+    dialog.KeyPreview = true;
+    dialog.KeyDown += (s, e) =>
+    {
+      // Get the main key (if not a modifier)
+      if (e.KeyCode != Keys.ControlKey && e.KeyCode != Keys.Menu && 
+          e.KeyCode != Keys.ShiftKey && e.KeyCode != Keys.LWin && e.KeyCode != Keys.RWin)
+      {
+        capturedKeyCode = (int)e.KeyCode;
+      }
+      
+      e.Handled = true;
+    };
+
+    dialog.KeyUp += (s, e) =>
+    {
+      // Clear captured key code if it was released
+      if (capturedKeyCode.HasValue && (int)e.KeyCode == capturedKeyCode.Value)
+      {
+        // Keep it for now - user might want to use it
+      }
+      e.Handled = true;
+    };
+
+    // Set focus and show
+    dialog.CancelButton = btnCancel;
+    dialog.Focus();
+
+    // Close backdrop when dialog closes
+    dialog.FormClosed += (s, e) => 
+    {
+      keyPollTimer.Stop();
+      keyPollTimer.Dispose();
+      backdrop.Close();
+      backdrop.Dispose();
+    };
+
+    if (dialog.ShowDialog(this) == DialogResult.OK)
+    {
+      // Validate that at least one modifier is pressed
+      if (!ctrlPressed && !altPressed && !shiftPressed && !winPressed)
+      {
+        MessageBox.Show("At least one modifier key (Ctrl, Alt, Shift, or Win) must be selected.", "Validation Error",
+          MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        return;
+      }
+
+      try
+      {
+        // Save to database
+        databaseService.SaveUserHotkeyPreference(username, ctrlPressed, altPressed, shiftPressed, winPressed, capturedKeyCode);
+        
+        // Update GlobalHotkeyManager
+        if (hotkeyManager != null)
+        {
+          hotkeyManager.SetHotkeyConfiguration(ctrlPressed, altPressed, shiftPressed, winPressed, capturedKeyCode);
+        }
+        
+        // Refresh display
+        LoadAndDisplayHotkey();
+      }
+      catch (Exception ex)
+      {
+        MessageBox.Show($"Failed to save hotkey preference: {ex.Message}", "Error",
+          MessageBoxButtons.OK, MessageBoxIcon.Error);
+      }
+    }
+  }
+
+  private void UpdateHotkeyDisplay(Label displayLabel, bool ctrl, bool alt, bool shift, bool win, int? keyCode)
+  {
+    var parts = new List<string>();
+    if (ctrl) parts.Add("Ctrl");
+    if (alt) parts.Add("Alt");
+    if (shift) parts.Add("Shift");
+    if (win) parts.Add("Win");
+    if (keyCode.HasValue)
+    {
+      string keyName = GetKeyName(keyCode.Value);
+      if (!string.IsNullOrEmpty(keyName))
+        parts.Add(keyName);
+    }
+
+    if (parts.Count == 0)
+    {
+      displayLabel.Text = "Press keys...";
+      displayLabel.ForeColor = Color.FromArgb(100, 100, 100);
+    }
+    else
+    {
+      displayLabel.Text = string.Join(" + ", parts);
+      displayLabel.ForeColor = Color.FromArgb(45, 45, 48);
+    }
   }
 }
