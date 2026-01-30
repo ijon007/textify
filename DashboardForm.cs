@@ -46,6 +46,7 @@ public partial class DashboardForm : Form
   private string? selectedStylePreference;
 
   // Settings page components
+  private Panel? panelSettingsContent;
   private Label? lblSettingsTitle;
   private Label? lblHotkeySectionTitle;
   private Label? lblCurrentHotkey;
@@ -2465,15 +2466,24 @@ public partial class DashboardForm : Form
     panelSettingsPage.BackColor = Color.White;
     panelSettingsPage.Dock = DockStyle.Fill;
     panelSettingsPage.Padding = new Padding(40, 60, 40, 50);
-    panelSettingsPage.AutoScroll = true;
-    panelSettingsPage.VerticalScroll.Visible = false;
-    panelSettingsPage.HorizontalScroll.Visible = false;
+    panelSettingsPage.AutoScroll = false; // We'll use a content panel instead
     panelSettingsPage.BorderStyle = BorderStyle.None; // Ensure no default border rendering
+
+    // Create scrollable content panel that respects padding
+    panelSettingsContent = new Panel();
+    panelSettingsContent.BackColor = Color.White;
+    panelSettingsContent.AutoScroll = true;
+    panelSettingsContent.VerticalScroll.Visible = false;
+    panelSettingsContent.HorizontalScroll.Visible = false;
+    panelSettingsContent.BorderStyle = BorderStyle.None;
+    panelSettingsContent.Location = new Point(40, 60); // Start at left and top padding
+    panelSettingsContent.Anchor = AnchorStyles.Top | AnchorStyles.Bottom; // Only anchor top/bottom, handle width manually
+    panelSettingsPage.Controls.Add(panelSettingsContent);
     
     // Hide scrollbar using Windows API
-    HideScrollbar(panelSettingsPage);
+    panelSettingsContent.Paint += (s, e) => HideScrollbar(panelSettingsContent!);
 
-    int currentY = 60;
+    int currentY = 0; // Start from top of content panel
     const int sectionSpacing = 50;
     const int itemSpacing = 30;
 
@@ -2485,7 +2495,7 @@ public partial class DashboardForm : Form
     lblSettingsTitle.Location = new Point(40, currentY);
     lblSettingsTitle.AutoSize = true;
     lblSettingsTitle.Name = "lblSettingsTitle";
-    panelSettingsPage.Controls.Add(lblSettingsTitle);
+    panelSettingsContent!.Controls.Add(lblSettingsTitle);
     currentY += 70;
 
     // ===== Push-to-Talk Shortcut Section =====
@@ -2495,7 +2505,7 @@ public partial class DashboardForm : Form
     lblHotkeySectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
     lblHotkeySectionTitle.Location = new Point(40, currentY);
     lblHotkeySectionTitle.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblHotkeySectionTitle);
+    panelSettingsContent!.Controls.Add(lblHotkeySectionTitle);
     currentY += 40;
 
     lblCurrentHotkey = new Label();
@@ -2504,14 +2514,14 @@ public partial class DashboardForm : Form
     lblCurrentHotkey.ForeColor = Color.FromArgb(100, 100, 100);
     lblCurrentHotkey.Location = new Point(40, currentY);
     lblCurrentHotkey.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblCurrentHotkey);
+    panelSettingsContent!.Controls.Add(lblCurrentHotkey);
 
     lblCurrentHotkeyValue = new Label();
     lblCurrentHotkeyValue.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
     lblCurrentHotkeyValue.ForeColor = Color.FromArgb(45, 45, 48);
     lblCurrentHotkeyValue.Location = new Point(180, currentY);
     lblCurrentHotkeyValue.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblCurrentHotkeyValue);
+    panelSettingsContent!.Controls.Add(lblCurrentHotkeyValue);
     currentY += itemSpacing;
 
     btnChangeHotkey = new Button();
@@ -2527,7 +2537,7 @@ public partial class DashboardForm : Form
     btnChangeHotkey.Click += BtnChangeHotkey_Click;
     btnChangeHotkey.MouseEnter += BtnChangeHotkey_MouseEnter;
     btnChangeHotkey.MouseLeave += BtnChangeHotkey_MouseLeave;
-    panelSettingsPage.Controls.Add(btnChangeHotkey);
+    panelSettingsContent!.Controls.Add(btnChangeHotkey);
     currentY += 50;
 
     lblHotkeyDescription = new Label();
@@ -2537,7 +2547,7 @@ public partial class DashboardForm : Form
     lblHotkeyDescription.Location = new Point(40, currentY);
     lblHotkeyDescription.AutoSize = true;
     lblHotkeyDescription.MaximumSize = new Size(600, 0);
-    panelSettingsPage.Controls.Add(lblHotkeyDescription);
+    panelSettingsContent!.Controls.Add(lblHotkeyDescription);
     currentY += sectionSpacing;
 
     // ===== Microphone Settings Section =====
@@ -2547,7 +2557,7 @@ public partial class DashboardForm : Form
     lblMicrophoneSectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
     lblMicrophoneSectionTitle.Location = new Point(40, currentY);
     lblMicrophoneSectionTitle.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblMicrophoneSectionTitle);
+    panelSettingsContent!.Controls.Add(lblMicrophoneSectionTitle);
     currentY += 40;
 
     lblMicrophoneDevice = new Label();
@@ -2556,7 +2566,7 @@ public partial class DashboardForm : Form
     lblMicrophoneDevice.ForeColor = Color.FromArgb(100, 100, 100);
     lblMicrophoneDevice.Location = new Point(40, currentY);
     lblMicrophoneDevice.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblMicrophoneDevice);
+    panelSettingsContent!.Controls.Add(lblMicrophoneDevice);
 
     cmbMicrophoneDevice = new ComboBox();
     cmbMicrophoneDevice.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
@@ -2565,7 +2575,7 @@ public partial class DashboardForm : Form
     cmbMicrophoneDevice.Location = new Point(180, currentY - 3);
     cmbMicrophoneDevice.SelectedIndexChanged += CmbMicrophoneDevice_SelectedIndexChanged;
     LoadMicrophoneDevices();
-    panelSettingsPage.Controls.Add(cmbMicrophoneDevice);
+    panelSettingsContent!.Controls.Add(cmbMicrophoneDevice);
     currentY += sectionSpacing;
 
     // ===== Overlay Settings Section =====
@@ -2575,7 +2585,7 @@ public partial class DashboardForm : Form
     lblOverlaySectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
     lblOverlaySectionTitle.Location = new Point(40, currentY);
     lblOverlaySectionTitle.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblOverlaySectionTitle);
+    panelSettingsContent!.Controls.Add(lblOverlaySectionTitle);
     currentY += 40;
 
     lblOverlayPosition = new Label();
@@ -2584,7 +2594,7 @@ public partial class DashboardForm : Form
     lblOverlayPosition.ForeColor = Color.FromArgb(100, 100, 100);
     lblOverlayPosition.Location = new Point(40, currentY);
     lblOverlayPosition.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblOverlayPosition);
+    panelSettingsContent!.Controls.Add(lblOverlayPosition);
 
     cmbOverlayPosition = new ComboBox();
     cmbOverlayPosition.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
@@ -2594,7 +2604,7 @@ public partial class DashboardForm : Form
     cmbOverlayPosition.Items.AddRange(new[] { "Bottom Center", "Top Center", "Bottom Left", "Bottom Right", "Top Left", "Top Right" });
     cmbOverlayPosition.SelectedIndex = 0; // Default to "Bottom Center"
     cmbOverlayPosition.SelectedIndexChanged += CmbOverlayPosition_SelectedIndexChanged;
-    panelSettingsPage.Controls.Add(cmbOverlayPosition);
+    panelSettingsContent!.Controls.Add(cmbOverlayPosition);
     currentY += itemSpacing;
 
     lblOverlayOpacity = new Label();
@@ -2603,7 +2613,7 @@ public partial class DashboardForm : Form
     lblOverlayOpacity.ForeColor = Color.FromArgb(100, 100, 100);
     lblOverlayOpacity.Location = new Point(40, currentY);
     lblOverlayOpacity.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblOverlayOpacity);
+    panelSettingsContent!.Controls.Add(lblOverlayOpacity);
 
     trackOverlayOpacity = new TrackBar();
     trackOverlayOpacity.Minimum = 0;
@@ -2612,7 +2622,7 @@ public partial class DashboardForm : Form
     trackOverlayOpacity.Size = new Size(200, 45);
     trackOverlayOpacity.Location = new Point(180, currentY - 5);
     trackOverlayOpacity.ValueChanged += TrackOverlayOpacity_ValueChanged;
-    panelSettingsPage.Controls.Add(trackOverlayOpacity);
+    panelSettingsContent!.Controls.Add(trackOverlayOpacity);
 
     lblOverlayOpacityValue = new Label();
     lblOverlayOpacityValue.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
@@ -2620,7 +2630,7 @@ public partial class DashboardForm : Form
     lblOverlayOpacityValue.Location = new Point(390, currentY);
     lblOverlayOpacityValue.AutoSize = true;
     lblOverlayOpacityValue.Text = "100%";
-    panelSettingsPage.Controls.Add(lblOverlayOpacityValue);
+    panelSettingsContent!.Controls.Add(lblOverlayOpacityValue);
     currentY += itemSpacing;
 
     chkShowOverlay = new CheckBox();
@@ -2630,7 +2640,7 @@ public partial class DashboardForm : Form
     chkShowOverlay.Location = new Point(40, currentY);
     chkShowOverlay.AutoSize = true;
     chkShowOverlay.CheckedChanged += ChkShowOverlay_CheckedChanged;
-    panelSettingsPage.Controls.Add(chkShowOverlay);
+    panelSettingsContent!.Controls.Add(chkShowOverlay);
     currentY += sectionSpacing;
 
     // ===== Application Behavior Section =====
@@ -2640,7 +2650,7 @@ public partial class DashboardForm : Form
     lblApplicationSectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
     lblApplicationSectionTitle.Location = new Point(40, currentY);
     lblApplicationSectionTitle.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblApplicationSectionTitle);
+    panelSettingsContent!.Controls.Add(lblApplicationSectionTitle);
     currentY += 40;
 
     chkStartWithWindows = new CheckBox();
@@ -2650,7 +2660,7 @@ public partial class DashboardForm : Form
     chkStartWithWindows.Location = new Point(40, currentY);
     chkStartWithWindows.AutoSize = true;
     chkStartWithWindows.CheckedChanged += ChkStartWithWindows_CheckedChanged;
-    panelSettingsPage.Controls.Add(chkStartWithWindows);
+    panelSettingsContent!.Controls.Add(chkStartWithWindows);
     currentY += itemSpacing;
 
     chkStartMinimized = new CheckBox();
@@ -2660,7 +2670,7 @@ public partial class DashboardForm : Form
     chkStartMinimized.Location = new Point(40, currentY);
     chkStartMinimized.AutoSize = true;
     chkStartMinimized.CheckedChanged += ChkStartMinimized_CheckedChanged;
-    panelSettingsPage.Controls.Add(chkStartMinimized);
+    panelSettingsContent!.Controls.Add(chkStartMinimized);
     currentY += itemSpacing;
 
     chkMinimizeToTray = new CheckBox();
@@ -2670,7 +2680,7 @@ public partial class DashboardForm : Form
     chkMinimizeToTray.Location = new Point(40, currentY);
     chkMinimizeToTray.AutoSize = true;
     chkMinimizeToTray.CheckedChanged += ChkMinimizeToTray_CheckedChanged;
-    panelSettingsPage.Controls.Add(chkMinimizeToTray);
+    panelSettingsContent!.Controls.Add(chkMinimizeToTray);
     currentY += sectionSpacing;
 
     // ===== Speech Recognition Section =====
@@ -2680,7 +2690,7 @@ public partial class DashboardForm : Form
     lblRecognitionSectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
     lblRecognitionSectionTitle.Location = new Point(40, currentY);
     lblRecognitionSectionTitle.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblRecognitionSectionTitle);
+    panelSettingsContent!.Controls.Add(lblRecognitionSectionTitle);
     currentY += 40;
 
     lblRecognitionSensitivity = new Label();
@@ -2689,7 +2699,7 @@ public partial class DashboardForm : Form
     lblRecognitionSensitivity.ForeColor = Color.FromArgb(100, 100, 100);
     lblRecognitionSensitivity.Location = new Point(40, currentY);
     lblRecognitionSensitivity.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblRecognitionSensitivity);
+    panelSettingsContent!.Controls.Add(lblRecognitionSensitivity);
 
     cmbRecognitionSensitivity = new ComboBox();
     cmbRecognitionSensitivity.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
@@ -2698,7 +2708,7 @@ public partial class DashboardForm : Form
     cmbRecognitionSensitivity.Location = new Point(180, currentY - 3);
     cmbRecognitionSensitivity.Items.AddRange(new[] { "Low", "Medium", "High" });
     cmbRecognitionSensitivity.SelectedIndexChanged += CmbRecognitionSensitivity_SelectedIndexChanged;
-    panelSettingsPage.Controls.Add(cmbRecognitionSensitivity);
+    panelSettingsContent!.Controls.Add(cmbRecognitionSensitivity);
     currentY += itemSpacing;
 
     lblAutoInjectDelay = new Label();
@@ -2707,7 +2717,7 @@ public partial class DashboardForm : Form
     lblAutoInjectDelay.ForeColor = Color.FromArgb(100, 100, 100);
     lblAutoInjectDelay.Location = new Point(40, currentY + 3);
     lblAutoInjectDelay.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblAutoInjectDelay);
+    panelSettingsContent!.Controls.Add(lblAutoInjectDelay);
 
     numAutoInjectDelay = new NumericUpDown();
     numAutoInjectDelay.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
@@ -2718,7 +2728,7 @@ public partial class DashboardForm : Form
     numAutoInjectDelay.Location = new Point(180, currentY - 3);
     numAutoInjectDelay.BorderStyle = BorderStyle.None;
     numAutoInjectDelay.ValueChanged += NumAutoInjectDelay_ValueChanged;
-    panelSettingsPage.Controls.Add(numAutoInjectDelay);
+    panelSettingsContent!.Controls.Add(numAutoInjectDelay);
     currentY += sectionSpacing;
 
     // ===== Data Management Section =====
@@ -2728,7 +2738,7 @@ public partial class DashboardForm : Form
     lblDataSectionTitle.ForeColor = Color.FromArgb(45, 45, 48);
     lblDataSectionTitle.Location = new Point(40, currentY);
     lblDataSectionTitle.AutoSize = true;
-    panelSettingsPage.Controls.Add(lblDataSectionTitle);
+    panelSettingsContent!.Controls.Add(lblDataSectionTitle);
     currentY += 40;
 
     btnClearSpeechHistory = new Button();
@@ -2744,7 +2754,7 @@ public partial class DashboardForm : Form
     btnClearSpeechHistory.Click += BtnClearSpeechHistory_Click;
     btnClearSpeechHistory.MouseEnter += BtnClearData_MouseEnter;
     btnClearSpeechHistory.MouseLeave += BtnClearData_MouseLeave;
-    panelSettingsPage.Controls.Add(btnClearSpeechHistory);
+    panelSettingsContent!.Controls.Add(btnClearSpeechHistory);
     currentY += itemSpacing;
 
     btnClearDictionary = new Button();
@@ -2760,7 +2770,7 @@ public partial class DashboardForm : Form
     btnClearDictionary.Click += BtnClearDictionary_Click;
     btnClearDictionary.MouseEnter += BtnClearData_MouseEnter;
     btnClearDictionary.MouseLeave += BtnClearData_MouseLeave;
-    panelSettingsPage.Controls.Add(btnClearDictionary);
+    panelSettingsContent!.Controls.Add(btnClearDictionary);
     currentY += itemSpacing;
 
     btnClearSnippets = new Button();
@@ -2776,7 +2786,7 @@ public partial class DashboardForm : Form
     btnClearSnippets.Click += BtnClearSnippets_Click;
     btnClearSnippets.MouseEnter += BtnClearData_MouseEnter;
     btnClearSnippets.MouseLeave += BtnClearData_MouseLeave;
-    panelSettingsPage.Controls.Add(btnClearSnippets);
+    panelSettingsContent!.Controls.Add(btnClearSnippets);
     currentY += itemSpacing;
 
     btnExportData = new Button();
@@ -2792,19 +2802,29 @@ public partial class DashboardForm : Form
     btnExportData.Click += BtnExportData_Click;
     btnExportData.MouseEnter += BtnExportData_MouseEnter;
     btnExportData.MouseLeave += BtnExportData_MouseLeave;
-    panelSettingsPage.Controls.Add(btnExportData);
+    panelSettingsContent!.Controls.Add(btnExportData);
     currentY += btnExportData.Height + itemSpacing;
 
-    // Add bottom spacer to ensure content doesn't go over the border
-    // This ensures the last control respects the bottom padding (50px)
-    Panel bottomSpacer = new Panel();
-    bottomSpacer.Size = new Size(1, 50); // Match bottom padding
-    bottomSpacer.Location = new Point(0, currentY);
-    bottomSpacer.BackColor = Color.Transparent;
-    panelSettingsPage.Controls.Add(bottomSpacer);
+    // Set content panel height based on content
+    panelSettingsContent.AutoScrollMinSize = new Size(0, currentY + 50); // Add bottom padding
 
     // Load all settings
     LoadAllSettings();
+
+    // Handle resize - set initial size
+    if (panelSettingsPage != null && panelSettingsContent != null)
+    {
+      int paddingLeft = 40;
+      int paddingRight = 40;
+      int paddingTop = 60;
+      int paddingBottom = 50;
+      int availableHeight = panelSettingsPage.ClientSize.Height - paddingTop - paddingBottom;
+      int availableWidth = panelSettingsPage.ClientSize.Width - paddingLeft - paddingRight;
+      panelSettingsContent.Height = availableHeight;
+      panelSettingsContent.Top = paddingTop;
+      panelSettingsContent.Left = paddingLeft;
+      panelSettingsContent.Width = availableWidth;
+    }
 
     // Handle resize
     panelSettingsPage.Resize += PanelSettingsPage_Resize;
@@ -2820,17 +2840,31 @@ public partial class DashboardForm : Form
 
   private void PanelSettingsPage_Resize(object? sender, EventArgs e)
   {
-    // Hide scrollbar after resize
-    if (panelSettingsPage != null)
+    // Constrain content panel to respect padding (similar to home page)
+    if (panelSettingsPage != null && panelSettingsContent != null)
     {
-      HideScrollbar(panelSettingsPage);
+      int paddingLeft = 40;
+      int paddingRight = 40;
+      int paddingTop = 60;
+      int paddingBottom = 50;
+      int availableHeight = panelSettingsPage.ClientSize.Height - paddingTop - paddingBottom;
+      int availableWidth = panelSettingsPage.ClientSize.Width - paddingLeft - paddingRight;
+      
+      // Update content panel size to stay within bounds
+      panelSettingsContent.Height = Math.Max(0, availableHeight);
+      panelSettingsContent.Top = paddingTop;
+      panelSettingsContent.Left = paddingLeft;
+      panelSettingsContent.Width = Math.Max(0, availableWidth);
+      
+      // Hide scrollbar
+      HideScrollbar(panelSettingsContent);
     }
     
     // Settings page layout is simple and doesn't need complex resize logic
     // But we can ensure description label doesn't overflow
-    if (lblHotkeyDescription != null && panelSettingsPage != null)
+    if (lblHotkeyDescription != null && panelSettingsContent != null)
     {
-      int maxWidth = panelSettingsPage.ClientSize.Width - 80; // Account for padding
+      int maxWidth = panelSettingsContent.ClientSize.Width - 80; // Account for padding
       lblHotkeyDescription.MaximumSize = new Size(maxWidth, 0);
     }
   }
