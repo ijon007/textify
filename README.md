@@ -7,6 +7,7 @@ A Windows Forms application that provides speech-to-text functionality with glob
 - **Speech Recognition**: Convert speech to text using Whisper.net offline speech recognition
 - **Global Hotkey**: Press `Ctrl + Win` to start/stop speech recognition from anywhere
 - **Text Injection**: Automatically injects recognized text into the active window
+- **Text Formatting**: Automatic filler word removal and style-based formatting (formal, casual, very casual)
 - **Speech History**: View and copy your previous speech transcriptions
 - **User Authentication**: Secure login system with SQL Server database
 - **Modern UI**: Clean, draggable interface with visual feedback
@@ -153,6 +154,7 @@ WinFormTest/
 ├── DashboardForm.cs            # Main dashboard with speech history
 ├── SpeechOverlayForm.cs        # Visual overlay during speech recognition
 ├── SpeechRecognitionService.cs # Handles Whisper.net speech recognition
+├── TranscriptionFormattingService.cs # Formats transcriptions (filler removal, punctuation, capitalization)
 ├── TextInjectionService.cs     # Injects text into active windows
 ├── GlobalHotkeyManager.cs      # Manages global hotkey registration
 ├── DatabaseService.cs          # Database operations
