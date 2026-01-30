@@ -15,6 +15,7 @@ public partial class DashboardForm : Form
   private SpeechRecognitionService? speechService;
   private GlobalHotkeyManager? hotkeyManager;
   private TextInjectionService? textInjectionService;
+  private TranscriptionFormattingService? transcriptionFormattingService;
   private SpeechOverlayForm? overlayForm;
   private string? recognizedText;
   private DatabaseService? databaseService;
@@ -262,6 +263,9 @@ public partial class DashboardForm : Form
       // Initialize text injection service
       textInjectionService = new TextInjectionService();
 
+      // Initialize transcription formatting service
+      transcriptionFormattingService = new TranscriptionFormattingService();
+
       // Initialize hotkey manager
       hotkeyManager = new GlobalHotkeyManager(this.Handle);
       hotkeyManager.HotkeyPressed += HotkeyManager_HotkeyPressed;
@@ -453,6 +457,16 @@ public partial class DashboardForm : Form
       {
         // Trim whitespace
         string finalText = recognizedText.Trim();
+        
+        // Apply formatting based on style preference
+        if (transcriptionFormattingService != null)
+        {
+          // Get style preference (use cached value or load from database)
+          string stylePreference = selectedStylePreference ?? 
+            databaseService?.GetUserStylePreference(username) ?? "formal";
+          
+          finalText = transcriptionFormattingService.FormatTranscription(finalText, stylePreference);
+        }
         
         // Set clipboard explicitly
         try
