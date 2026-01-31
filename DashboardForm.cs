@@ -16,6 +16,7 @@ public partial class DashboardForm : Form
   private GlobalHotkeyManager? hotkeyManager;
   private TextInjectionService? textInjectionService;
   private TranscriptionFormattingService? transcriptionFormattingService;
+  private TranscriptionCorrectionService? transcriptionCorrectionService;
   private SpeechOverlayForm? overlayForm;
   private string? recognizedText;
   private DatabaseService? databaseService;
@@ -266,6 +267,9 @@ public partial class DashboardForm : Form
       // Initialize transcription formatting service
       transcriptionFormattingService = new TranscriptionFormattingService();
 
+      // Initialize transcription correction service
+      transcriptionCorrectionService = new TranscriptionCorrectionService(databaseService);
+
       // Initialize hotkey manager
       hotkeyManager = new GlobalHotkeyManager(this.Handle);
       hotkeyManager.HotkeyPressed += HotkeyManager_HotkeyPressed;
@@ -459,6 +463,12 @@ public partial class DashboardForm : Form
       {
         // Trim whitespace
         string finalText = recognizedText.Trim();
+        
+        // Apply corrections (dictionary and snippets) before formatting
+        if (transcriptionCorrectionService != null)
+        {
+          finalText = transcriptionCorrectionService.CorrectTranscription(finalText, username);
+        }
         
         // Apply formatting based on style preference
         if (transcriptionFormattingService != null)
@@ -1601,6 +1611,8 @@ public partial class DashboardForm : Form
         }
 
         RefreshDictionaryList();
+        // Invalidate dictionary cache
+        transcriptionCorrectionService?.InvalidateDictionaryCache(username);
       }
       catch (InvalidOperationException ex)
       {
@@ -1654,6 +1666,8 @@ public partial class DashboardForm : Form
         {
           databaseService.DeleteDictionaryEntry(id, username);
           RefreshDictionaryList();
+          // Invalidate dictionary cache
+          transcriptionCorrectionService?.InvalidateDictionaryCache(username);
         }
         catch (Exception ex)
         {
@@ -2156,6 +2170,8 @@ public partial class DashboardForm : Form
         }
 
         RefreshSnippetsList();
+        // Invalidate snippets cache
+        transcriptionCorrectionService?.InvalidateSnippetsCache(username);
       }
       catch (InvalidOperationException ex)
       {
@@ -2209,6 +2225,8 @@ public partial class DashboardForm : Form
         {
           databaseService.DeleteSnippet(id, username);
           RefreshSnippetsList();
+          // Invalidate snippets cache
+          transcriptionCorrectionService?.InvalidateSnippetsCache(username);
         }
         catch (Exception ex)
         {
@@ -3481,6 +3499,8 @@ public partial class DashboardForm : Form
         databaseService.ClearAllDictionary(username);
         if (panelDictionaryList != null)
           LoadDictionaryEntries();
+        // Invalidate dictionary cache
+        transcriptionCorrectionService?.InvalidateDictionaryCache(username);
         MessageBox.Show("Dictionary cleared successfully.", "Success",
           MessageBoxButtons.OK, MessageBoxIcon.Information);
       }
@@ -3510,6 +3530,8 @@ public partial class DashboardForm : Form
         databaseService.ClearAllSnippets(username);
         if (panelSnippetsList != null)
           LoadSnippetsEntries();
+        // Invalidate snippets cache
+        transcriptionCorrectionService?.InvalidateSnippetsCache(username);
         MessageBox.Show("Snippets cleared successfully.", "Success",
           MessageBoxButtons.OK, MessageBoxIcon.Information);
       }
