@@ -152,7 +152,7 @@ public class HomePageService
         entryPanel.Location = new Point(10, yOffset);
         entryPanel.Size = new Size(availableWidth, fixedPanelHeight);
         entryPanel.Name = $"panelEntry_{id}";
-        entryPanel.Paint += EntryPanel_Paint;
+        entryPanel.Paint += UIStylingService.DrawEntryPanelBottomBorder;
         entryPanel.AutoSize = false;
         entryPanel.AutoSizeMode = AutoSizeMode.GrowOnly;
 
@@ -226,17 +226,6 @@ public class HomePageService
         panelSpeechHistory.Controls.Add(entryPanel);
     }
 
-    private void EntryPanel_Paint(object? sender, PaintEventArgs e)
-    {
-        if (sender is Panel panel)
-        {
-            // Draw only bottom border with no rounding
-            using (Pen pen = new Pen(Color.FromArgb(200, 200, 200), 1))
-            {
-                e.Graphics.DrawLine(pen, 0, panel.Height - 1, panel.Width, panel.Height - 1);
-            }
-        }
-    }
 
     private void BtnCopy_Click(object? sender, EventArgs e)
     {

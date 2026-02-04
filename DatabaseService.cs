@@ -9,7 +9,7 @@ public class DatabaseService
 
   public DatabaseService()
   {
-    connectionString = @"Data Source=localhost\SQLEXPRESS;Initial Catalog=WinFormTest;Integrated Security=True;TrustServerCertificate=True;";
+    connectionString = DatabaseConstants.ConnectionString;
   }
 
   public void SaveSpeech(string username, string speechText, int? duration = null)
@@ -700,7 +700,7 @@ public class DatabaseService
   public string GetUserStylePreference(string username)
   {
     if (string.IsNullOrWhiteSpace(username))
-      return "formal"; // Default style
+      return StylePreferences.Default;
 
     try
     {
@@ -717,7 +717,7 @@ public class DatabaseService
           object? result = command.ExecuteScalar();
           if (result != null && result != DBNull.Value)
           {
-            return result.ToString() ?? "formal";
+            return result.ToString() ?? StylePreferences.Default;
           }
         }
       }
@@ -727,7 +727,7 @@ public class DatabaseService
       System.Diagnostics.Debug.WriteLine($"Failed to get user style preference: {ex.Message}");
     }
 
-    return "formal"; // Default style
+    return StylePreferences.Default;
   }
 
   public void SaveUserStylePreference(string username, string style)
@@ -736,8 +736,8 @@ public class DatabaseService
       throw new ArgumentException("Username and style cannot be empty.");
 
     // Validate style value
-    if (style != "formal" && style != "casual" && style != "very_casual")
-      throw new ArgumentException("Invalid style value. Must be 'formal', 'casual', or 'very_casual'.");
+    if (style != StylePreferences.Formal && style != StylePreferences.Casual && style != StylePreferences.VeryCasual)
+      throw new ArgumentException($"Invalid style value. Must be '{StylePreferences.Formal}', '{StylePreferences.Casual}', or '{StylePreferences.VeryCasual}'.");
 
     try
     {
@@ -745,15 +745,7 @@ public class DatabaseService
       {
         connection.Open();
         
-        // Check if preference already exists
-        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
-        bool exists = false;
-        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
-        {
-          checkCommand.Parameters.AddWithValue("@username", username);
-          int count = (int)checkCommand.ExecuteScalar();
-          exists = count > 0;
-        }
+        bool exists = UserSettingsExists(connection, username);
         
         if (exists)
         {
@@ -921,15 +913,7 @@ public class DatabaseService
             "Please run the migration script (database_migration.sql) to add these columns to the UserSettings table.");
         }
         
-        // Check if preference already exists
-        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
-        bool exists = false;
-        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
-        {
-          checkCommand.Parameters.AddWithValue("@username", username);
-          int count = (int)checkCommand.ExecuteScalar();
-          exists = count > 0;
-        }
+        bool exists = UserSettingsExists(connection, username);
         
         if (exists)
         {
@@ -950,17 +934,17 @@ public class DatabaseService
         else
         {
           // Insert new preference (include StylePreference with default if needed)
-          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, HotkeyModifiers, HotkeyKeyCode, CreatedAt) VALUES (@username, @style, @modifiers, @keyCode, @createdAt)";
-          using (SqlCommand command = new SqlCommand(insertQuery, connection))
+          EnsureUserSettingsExists(connection, username);
+          // Update the hotkey preferences separately
+          string updateQuery = "UPDATE UserSettings SET HotkeyModifiers = @modifiers, HotkeyKeyCode = @keyCode WHERE Username = @username";
+          using (SqlCommand command = new SqlCommand(updateQuery, connection))
           {
             command.Parameters.AddWithValue("@username", username);
-            command.Parameters.AddWithValue("@style", "formal"); // Default style preference
             command.Parameters.AddWithValue("@modifiers", modifiers);
             if (keyCode.HasValue)
               command.Parameters.AddWithValue("@keyCode", keyCode.Value);
             else
               command.Parameters.AddWithValue("@keyCode", DBNull.Value);
-            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
             command.ExecuteNonQuery();
           }
         }
@@ -970,6 +954,33 @@ public class DatabaseService
     {
       System.Diagnostics.Debug.WriteLine($"Failed to save user hotkey preference: {ex.Message}");
       throw;
+    }
+  }
+
+  // Helper method to check if user settings record exists
+  private bool UserSettingsExists(SqlConnection connection, string username)
+  {
+    string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
+    using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
+    {
+      checkCommand.Parameters.AddWithValue("@username", username);
+      return (int)checkCommand.ExecuteScalar() > 0;
+    }
+  }
+
+  // Helper method to ensure user settings record exists (inserts with default style if not)
+  private void EnsureUserSettingsExists(SqlConnection connection, string username)
+  {
+    if (!UserSettingsExists(connection, username))
+    {
+      string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, CreatedAt) VALUES (@username, @style, @createdAt)";
+      using (SqlCommand command = new SqlCommand(insertQuery, connection))
+      {
+        command.Parameters.AddWithValue("@username", username);
+        command.Parameters.AddWithValue("@style", StylePreferences.Default);
+        command.Parameters.AddWithValue("@createdAt", DateTime.Now);
+        command.ExecuteNonQuery();
+      }
     }
   }
 
@@ -1082,13 +1093,7 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
-        bool exists = false;
-        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
-        {
-          checkCommand.Parameters.AddWithValue("@username", username);
-          exists = (int)checkCommand.ExecuteScalar() > 0;
-        }
+        bool exists = UserSettingsExists(connection, username);
 
         if (exists)
         {
@@ -1106,16 +1111,16 @@ public class DatabaseService
         }
         else
         {
-          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, MicrophoneDeviceId, CreatedAt) VALUES (@username, @style, @deviceId, @createdAt)";
-          using (SqlCommand command = new SqlCommand(insertQuery, connection))
+          EnsureUserSettingsExists(connection, username);
+          // Update the MicrophoneDeviceId separately
+          string updateQuery = "UPDATE UserSettings SET MicrophoneDeviceId = @deviceId WHERE Username = @username";
+          using (SqlCommand command = new SqlCommand(updateQuery, connection))
           {
             command.Parameters.AddWithValue("@username", username);
-            command.Parameters.AddWithValue("@style", "formal");
             if (string.IsNullOrEmpty(deviceId))
               command.Parameters.AddWithValue("@deviceId", DBNull.Value);
             else
               command.Parameters.AddWithValue("@deviceId", deviceId);
-            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
             command.ExecuteNonQuery();
           }
         }
@@ -1170,13 +1175,7 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
-        bool exists = false;
-        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
-        {
-          checkCommand.Parameters.AddWithValue("@username", username);
-          exists = (int)checkCommand.ExecuteScalar() > 0;
-        }
+        bool exists = UserSettingsExists(connection, username);
 
         if (exists)
         {
@@ -1191,13 +1190,13 @@ public class DatabaseService
         }
         else
         {
-          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, OverlayPosition, CreatedAt) VALUES (@username, @style, @position, @createdAt)";
-          using (SqlCommand command = new SqlCommand(insertQuery, connection))
+          EnsureUserSettingsExists(connection, username);
+          // Update the OverlayPosition separately
+          string updateQuery = "UPDATE UserSettings SET OverlayPosition = @position WHERE Username = @username";
+          using (SqlCommand command = new SqlCommand(updateQuery, connection))
           {
             command.Parameters.AddWithValue("@username", username);
-            command.Parameters.AddWithValue("@style", "formal");
             command.Parameters.AddWithValue("@position", position);
-            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
             command.ExecuteNonQuery();
           }
         }
@@ -1256,13 +1255,7 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        string checkQuery = "SELECT COUNT(*) FROM UserSettings WHERE Username = @username";
-        bool exists = false;
-        using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
-        {
-          checkCommand.Parameters.AddWithValue("@username", username);
-          exists = (int)checkCommand.ExecuteScalar() > 0;
-        }
+        bool exists = UserSettingsExists(connection, username);
 
         if (exists)
         {
@@ -1278,14 +1271,14 @@ public class DatabaseService
         }
         else
         {
-          string insertQuery = "INSERT INTO UserSettings (Username, StylePreference, StartMinimized, MinimizeToTray, CreatedAt) VALUES (@username, @style, @startMinimized, @minimizeToTray, @createdAt)";
-          using (SqlCommand command = new SqlCommand(insertQuery, connection))
+          EnsureUserSettingsExists(connection, username);
+          // Update the application preferences separately
+          string updateQuery = "UPDATE UserSettings SET StartMinimized = @startMinimized, MinimizeToTray = @minimizeToTray WHERE Username = @username";
+          using (SqlCommand command = new SqlCommand(updateQuery, connection))
           {
             command.Parameters.AddWithValue("@username", username);
-            command.Parameters.AddWithValue("@style", "formal");
             command.Parameters.AddWithValue("@startMinimized", startMinimized);
             command.Parameters.AddWithValue("@minimizeToTray", minimizeToTray);
-            command.Parameters.AddWithValue("@createdAt", DateTime.Now);
             command.ExecuteNonQuery();
           }
         }

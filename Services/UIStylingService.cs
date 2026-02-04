@@ -48,4 +48,55 @@ public static class UIStylingService
             ShowScrollBar(panel.Handle, SB_VERT, false);
         }
     }
+
+    public static void DrawEntryPanelBottomBorder(object? sender, PaintEventArgs e)
+    {
+        if (sender is Panel panel)
+        {
+            using (Pen pen = new Pen(UIColors.BorderGray, 1))
+            {
+                e.Graphics.DrawLine(pen, 0, panel.Height - 1, panel.Width, panel.Height - 1);
+            }
+        }
+    }
+
+    public static Button CreateEditButton(int id, int panelWidth, int yPosition, EventHandler clickHandler, EventHandler? mouseEnterHandler = null, EventHandler? mouseLeaveHandler = null)
+    {
+        Button btnEdit = new Button();
+        btnEdit.Text = "✏️";
+        btnEdit.Font = UIFonts.Medium;
+        btnEdit.Size = UILayout.IconButtonSize;
+        btnEdit.FlatStyle = FlatStyle.Flat;
+        btnEdit.FlatAppearance.BorderSize = 0;
+        btnEdit.BackColor = UIColors.LightGrayBackground;
+        btnEdit.ForeColor = UIColors.SecondaryText;
+        btnEdit.Cursor = Cursors.Hand;
+        btnEdit.Name = $"btnEdit_{id}";
+        btnEdit.Location = new Point(panelWidth - 90, yPosition);
+        btnEdit.Tag = id;
+        btnEdit.Click += clickHandler;
+        if (mouseEnterHandler != null) btnEdit.MouseEnter += mouseEnterHandler;
+        if (mouseLeaveHandler != null) btnEdit.MouseLeave += mouseLeaveHandler;
+        return btnEdit;
+    }
+
+    public static Button CreateDeleteButton(int id, int panelWidth, int yPosition, EventHandler clickHandler, EventHandler? mouseEnterHandler = null, EventHandler? mouseLeaveHandler = null)
+    {
+        Button btnDelete = new Button();
+        btnDelete.Text = "🗑️";
+        btnDelete.Font = UIFonts.Medium;
+        btnDelete.Size = UILayout.IconButtonSize;
+        btnDelete.FlatStyle = FlatStyle.Flat;
+        btnDelete.FlatAppearance.BorderSize = 0;
+        btnDelete.BackColor = UIColors.LightGrayBackground;
+        btnDelete.ForeColor = UIColors.SecondaryText;
+        btnDelete.Cursor = Cursors.Hand;
+        btnDelete.Name = $"btnDelete_{id}";
+        btnDelete.Location = new Point(panelWidth - 50, yPosition);
+        btnDelete.Tag = id;
+        btnDelete.Click += clickHandler;
+        if (mouseEnterHandler != null) btnDelete.MouseEnter += mouseEnterHandler;
+        if (mouseLeaveHandler != null) btnDelete.MouseLeave += mouseLeaveHandler;
+        return btnDelete;
+    }
 }

@@ -115,7 +115,7 @@ public class SpeechIntegrationService
                 
                 // Apply formatting based on style preference
                 string stylePreference = stylePageService?.GetSelectedStylePreference() ?? 
-                    databaseService?.GetUserStylePreference(username) ?? "formal";
+                    databaseService?.GetUserStylePreference(username) ?? StylePreferences.Default;
                 
                 finalText = transcriptionFormattingService.FormatTranscription(finalText, stylePreference);
                 

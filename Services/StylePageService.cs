@@ -38,7 +38,7 @@ public class StylePageService
         lblStyleTitle.Name = "lblStyleTitle";
 
         // Load saved preference
-        selectedStylePreference = databaseService?.GetUserStylePreference(username) ?? "formal";
+        selectedStylePreference = databaseService?.GetUserStylePreference(username) ?? StylePreferences.Default;
 
         // Create style cards
         CreateStyleCards();
@@ -78,7 +78,7 @@ public class StylePageService
             "Formal.",
             "Caps + Punctuation",
             "Hey, are you free for lunch tomorrow? Let's do 12 if that works for you.",
-            "formal",
+            StylePreferences.Formal,
             new Point(startX, cardsTop),
             cardWidth,
             cardHeight
@@ -89,7 +89,7 @@ public class StylePageService
             "Casual",
             "Caps + Less punctuation",
             "Hey are you free for lunch tomorrow? Let's do 12 if that works for you",
-            "casual",
+            StylePreferences.Casual,
             new Point(startX + cardWidth + cardSpacing, cardsTop),
             cardWidth,
             cardHeight
@@ -100,7 +100,7 @@ public class StylePageService
             "very casual",
             "No Caps + Less punctuation",
             "hey are you free for lunch tomorrow? let's do 12 if that works for you",
-            "very_casual",
+            StylePreferences.VeryCasual,
             new Point(startX + (cardWidth + cardSpacing) * 2, cardsTop),
             cardWidth,
             cardHeight

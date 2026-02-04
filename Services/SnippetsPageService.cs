@@ -40,7 +40,7 @@ public class SnippetsPageService
         lblSnippetsTitle = new Label();
         lblSnippetsTitle.Text = "Snippets";
         lblSnippetsTitle.Font = new Font("Poppins", 24F, FontStyle.Bold, GraphicsUnit.Point);
-        lblSnippetsTitle.ForeColor = Color.FromArgb(45, 45, 48);
+        lblSnippetsTitle.ForeColor = UIColors.DarkText;
         lblSnippetsTitle.Location = new Point(40, 60);
         lblSnippetsTitle.AutoSize = true;
         lblSnippetsTitle.Name = "lblSnippetsTitle";
@@ -51,7 +51,7 @@ public class SnippetsPageService
         btnAddNewSnippet.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
         btnAddNewSnippet.FlatStyle = FlatStyle.Flat;
         btnAddNewSnippet.FlatAppearance.BorderSize = 0;
-        btnAddNewSnippet.BackColor = Color.FromArgb(45, 45, 48);
+        btnAddNewSnippet.BackColor = UIColors.DarkPrimary;
         btnAddNewSnippet.ForeColor = Color.White;
         btnAddNewSnippet.Cursor = Cursors.Hand;
         btnAddNewSnippet.Size = new Size(100, 35);
@@ -95,7 +95,7 @@ public class SnippetsPageService
 
         // Handle resize
         panelSnippetsPage.Resize += PanelSnippetsPage_Resize;
-        panelSnippetsPage.Paint += (s, e) => UIStylingService.DrawRoundedBorder(panelSnippetsPage, e.Graphics, 10, Color.FromArgb(200, 200, 200));
+        panelSnippetsPage.Paint += (s, e) => UIStylingService.DrawRoundedBorder(panelSnippetsPage, e.Graphics, UILayout.BorderRadius, UIColors.BorderGray);
     }
 
     private void PanelSnippetsPage_Resize(object? sender, EventArgs e)
@@ -184,14 +184,14 @@ public class SnippetsPageService
         entryPanel.Location = new Point(10, yOffset);
         entryPanel.Size = new Size(availableWidth, fixedPanelHeight);
         entryPanel.Name = $"panelEntry_{id}";
-        entryPanel.Paint += SnippetEntryPanel_Paint;
+        entryPanel.Paint += UIStylingService.DrawEntryPanelBottomBorder;
         entryPanel.AutoSize = false;
 
         // Create shortcut label
         Label lblShortcut = new Label();
         lblShortcut.Text = shortcut;
         lblShortcut.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
-        lblShortcut.ForeColor = Color.FromArgb(45, 45, 48);
+        lblShortcut.ForeColor = UIColors.DarkText;
         lblShortcut.BackColor = Color.White;
         lblShortcut.Location = new Point(10, 10);
         lblShortcut.AutoSize = false;
@@ -213,38 +213,10 @@ public class SnippetsPageService
         lblReplacement.TextAlign = ContentAlignment.MiddleLeft;
 
         // Create edit button
-        Button btnEdit = new Button();
-        btnEdit.Text = "✏️";
-        btnEdit.Font = new Font("Poppins", 10F, FontStyle.Regular, GraphicsUnit.Point);
-        btnEdit.Size = new Size(30, 30);
-        btnEdit.FlatStyle = FlatStyle.Flat;
-        btnEdit.FlatAppearance.BorderSize = 0;
-        btnEdit.BackColor = Color.FromArgb(245, 245, 245);
-        btnEdit.ForeColor = Color.FromArgb(100, 100, 100);
-        btnEdit.Cursor = Cursors.Hand;
-        btnEdit.Name = $"btnEdit_{id}";
-        btnEdit.Location = new Point(entryPanel.Width - 90, 15);
-        btnEdit.Tag = id;
-        btnEdit.Click += BtnEditSnippet_Click;
-        btnEdit.MouseEnter += BtnEditSnippet_MouseEnter;
-        btnEdit.MouseLeave += BtnEditSnippet_MouseLeave;
+        Button btnEdit = UIStylingService.CreateEditButton(id, entryPanel.Width, 15, BtnEditSnippet_Click, BtnEditSnippet_MouseEnter, BtnEditSnippet_MouseLeave);
 
         // Create delete button
-        Button btnDelete = new Button();
-        btnDelete.Text = "🗑️";
-        btnDelete.Font = new Font("Poppins", 10F, FontStyle.Regular, GraphicsUnit.Point);
-        btnDelete.Size = new Size(30, 30);
-        btnDelete.FlatStyle = FlatStyle.Flat;
-        btnDelete.FlatAppearance.BorderSize = 0;
-        btnDelete.BackColor = Color.FromArgb(245, 245, 245);
-        btnDelete.ForeColor = Color.FromArgb(100, 100, 100);
-        btnDelete.Cursor = Cursors.Hand;
-        btnDelete.Name = $"btnDelete_{id}";
-        btnDelete.Location = new Point(entryPanel.Width - 50, 15);
-        btnDelete.Tag = id;
-        btnDelete.Click += BtnDeleteSnippet_Click;
-        btnDelete.MouseEnter += BtnDeleteSnippet_MouseEnter;
-        btnDelete.MouseLeave += BtnDeleteSnippet_MouseLeave;
+        Button btnDelete = UIStylingService.CreateDeleteButton(id, entryPanel.Width, 15, BtnDeleteSnippet_Click, BtnDeleteSnippet_MouseEnter, BtnDeleteSnippet_MouseLeave);
 
         // Add controls to entry panel
         entryPanel.Controls.Add(lblShortcut);
@@ -256,16 +228,6 @@ public class SnippetsPageService
         panelSnippetsList.Controls.Add(entryPanel);
     }
 
-    private void SnippetEntryPanel_Paint(object? sender, PaintEventArgs e)
-    {
-        if (sender is Panel panel)
-        {
-            using (Pen pen = new Pen(Color.FromArgb(200, 200, 200), 1))
-            {
-                e.Graphics.DrawLine(pen, 0, panel.Height - 1, panel.Width, panel.Height - 1);
-            }
-        }
-    }
 
     private void BtnAddNewSnippet_Click(object? sender, EventArgs e)
     {
@@ -276,7 +238,7 @@ public class SnippetsPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(35, 35, 38);
+            btn.BackColor = UIColors.DarkHover;
         }
     }
 
@@ -284,7 +246,7 @@ public class SnippetsPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(45, 45, 48);
+            btn.BackColor = UIColors.DarkPrimary;
         }
     }
 
@@ -366,7 +328,7 @@ public class SnippetsPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(230, 230, 230);
+            btn.BackColor = UIColors.HoverGray;
         }
     }
 
@@ -374,7 +336,7 @@ public class SnippetsPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(245, 245, 245);
+            btn.BackColor = UIColors.LightGrayBackground;
         }
     }
 
@@ -416,7 +378,7 @@ public class SnippetsPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(230, 230, 230);
+            btn.BackColor = UIColors.HoverGray;
         }
     }
 
@@ -424,7 +386,7 @@ public class SnippetsPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(245, 245, 245);
+            btn.BackColor = UIColors.LightGrayBackground;
         }
     }
 

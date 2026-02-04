@@ -40,7 +40,7 @@ public class DictionaryPageService
         lblDictionaryTitle = new Label();
         lblDictionaryTitle.Text = "Dictionary";
         lblDictionaryTitle.Font = new Font("Poppins", 24F, FontStyle.Bold, GraphicsUnit.Point);
-        lblDictionaryTitle.ForeColor = Color.FromArgb(45, 45, 48);
+        lblDictionaryTitle.ForeColor = UIColors.DarkText;
         lblDictionaryTitle.Location = new Point(40, 60);
         lblDictionaryTitle.AutoSize = true;
         lblDictionaryTitle.Name = "lblDictionaryTitle";
@@ -51,7 +51,7 @@ public class DictionaryPageService
         btnAddNew.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
         btnAddNew.FlatStyle = FlatStyle.Flat;
         btnAddNew.FlatAppearance.BorderSize = 0;
-        btnAddNew.BackColor = Color.FromArgb(45, 45, 48);
+        btnAddNew.BackColor = UIColors.DarkPrimary;
         btnAddNew.ForeColor = Color.White;
         btnAddNew.Cursor = Cursors.Hand;
         btnAddNew.Size = new Size(100, 35);
@@ -95,7 +95,7 @@ public class DictionaryPageService
 
         // Handle resize
         panelDictionaryPage.Resize += PanelDictionaryPage_Resize;
-        panelDictionaryPage.Paint += (s, e) => UIStylingService.DrawRoundedBorder(panelDictionaryPage, e.Graphics, 10, Color.FromArgb(200, 200, 200));
+        panelDictionaryPage.Paint += (s, e) => UIStylingService.DrawRoundedBorder(panelDictionaryPage, e.Graphics, UILayout.BorderRadius, UIColors.BorderGray);
     }
 
     private void PanelDictionaryPage_Resize(object? sender, EventArgs e)
@@ -184,7 +184,7 @@ public class DictionaryPageService
         entryPanel.Location = new Point(10, yOffset);
         entryPanel.Size = new Size(availableWidth, fixedPanelHeight);
         entryPanel.Name = $"panelEntry_{id}";
-        entryPanel.Paint += DictionaryEntryPanel_Paint;
+        entryPanel.Paint += UIStylingService.DrawEntryPanelBottomBorder;
         entryPanel.AutoSize = false;
 
         // Create word label
@@ -200,38 +200,10 @@ public class DictionaryPageService
         lblWord.TextAlign = ContentAlignment.MiddleLeft;
 
         // Create edit button
-        Button btnEdit = new Button();
-        btnEdit.Text = "✏️";
-        btnEdit.Font = new Font("Poppins", 10F, FontStyle.Regular, GraphicsUnit.Point);
-        btnEdit.Size = new Size(30, 30);
-        btnEdit.FlatStyle = FlatStyle.Flat;
-        btnEdit.FlatAppearance.BorderSize = 0;
-        btnEdit.BackColor = Color.FromArgb(245, 245, 245);
-        btnEdit.ForeColor = Color.FromArgb(100, 100, 100);
-        btnEdit.Cursor = Cursors.Hand;
-        btnEdit.Name = $"btnEdit_{id}";
-        btnEdit.Location = new Point(entryPanel.Width - 90, 15);
-        btnEdit.Tag = id;
-        btnEdit.Click += BtnEdit_Click;
-        btnEdit.MouseEnter += BtnEdit_MouseEnter;
-        btnEdit.MouseLeave += BtnEdit_MouseLeave;
+        Button btnEdit = UIStylingService.CreateEditButton(id, entryPanel.Width, 15, BtnEdit_Click, BtnEdit_MouseEnter, BtnEdit_MouseLeave);
 
         // Create delete button
-        Button btnDelete = new Button();
-        btnDelete.Text = "🗑️";
-        btnDelete.Font = new Font("Poppins", 10F, FontStyle.Regular, GraphicsUnit.Point);
-        btnDelete.Size = new Size(30, 30);
-        btnDelete.FlatStyle = FlatStyle.Flat;
-        btnDelete.FlatAppearance.BorderSize = 0;
-        btnDelete.BackColor = Color.FromArgb(245, 245, 245);
-        btnDelete.ForeColor = Color.FromArgb(100, 100, 100);
-        btnDelete.Cursor = Cursors.Hand;
-        btnDelete.Name = $"btnDelete_{id}";
-        btnDelete.Location = new Point(entryPanel.Width - 50, 15);
-        btnDelete.Tag = id;
-        btnDelete.Click += BtnDelete_Click;
-        btnDelete.MouseEnter += BtnDelete_MouseEnter;
-        btnDelete.MouseLeave += BtnDelete_MouseLeave;
+        Button btnDelete = UIStylingService.CreateDeleteButton(id, entryPanel.Width, 15, BtnDelete_Click, BtnDelete_MouseEnter, BtnDelete_MouseLeave);
 
         // Add controls to entry panel
         entryPanel.Controls.Add(lblWord);
@@ -242,16 +214,6 @@ public class DictionaryPageService
         panelDictionaryList.Controls.Add(entryPanel);
     }
 
-    private void DictionaryEntryPanel_Paint(object? sender, PaintEventArgs e)
-    {
-        if (sender is Panel panel)
-        {
-            using (Pen pen = new Pen(Color.FromArgb(200, 200, 200), 1))
-            {
-                e.Graphics.DrawLine(pen, 0, panel.Height - 1, panel.Width, panel.Height - 1);
-            }
-        }
-    }
 
     private void BtnAddNew_Click(object? sender, EventArgs e)
     {
@@ -262,7 +224,7 @@ public class DictionaryPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(35, 35, 38);
+            btn.BackColor = UIColors.DarkHover;
         }
     }
 
@@ -270,7 +232,7 @@ public class DictionaryPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(45, 45, 48);
+            btn.BackColor = UIColors.DarkPrimary;
         }
     }
 
@@ -352,7 +314,7 @@ public class DictionaryPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(230, 230, 230);
+            btn.BackColor = UIColors.HoverGray;
         }
     }
 
@@ -360,7 +322,7 @@ public class DictionaryPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(245, 245, 245);
+            btn.BackColor = UIColors.LightGrayBackground;
         }
     }
 
@@ -402,7 +364,7 @@ public class DictionaryPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(230, 230, 230);
+            btn.BackColor = UIColors.HoverGray;
         }
     }
 
@@ -410,7 +372,7 @@ public class DictionaryPageService
     {
         if (sender is Button btn)
         {
-            btn.BackColor = Color.FromArgb(245, 245, 245);
+            btn.BackColor = UIColors.LightGrayBackground;
         }
     }
 

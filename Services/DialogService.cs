@@ -2,11 +2,8 @@ namespace WinFormTest.Services;
 
 public static class DialogService
 {
-    public static DialogResult ShowDictionaryDialog(Form parent, bool isAdding, out string word, string initialWord = "")
+    private static Form CreateBackdrop(Form parent, Form dialog)
     {
-        word = "";
-        
-        // Create backdrop overlay Form (separate window)
         Form backdrop = new Form();
         backdrop.FormBorderStyle = FormBorderStyle.None;
         backdrop.WindowState = FormWindowState.Normal;
@@ -18,89 +15,134 @@ public static class DialogService
         backdrop.ShowInTaskbar = false;
         backdrop.TopMost = true;
         backdrop.Enabled = true;
+        backdrop.Click += (s, e) => dialog.DialogResult = DialogResult.Cancel;
+        return backdrop;
+    }
 
-        // Create a Form-based dialog styled like TaskDialog
+    private static Form CreateDialogForm(Size size)
+    {
         Form dialog = new Form();
         dialog.Text = "";
         dialog.FormBorderStyle = FormBorderStyle.None;
-        dialog.Size = new Size(500, 200);
+        dialog.Size = size;
         dialog.StartPosition = FormStartPosition.CenterParent;
-        dialog.BackColor = Color.White;
+        dialog.BackColor = UIColors.White;
         dialog.ShowInTaskbar = false;
         dialog.TopMost = true;
-        
-        // Set backdrop click handler to close dialog
-        backdrop.Click += (s, e) => dialog.DialogResult = DialogResult.Cancel;
+        return dialog;
+    }
 
-        // Show backdrop first, then dialog
-        backdrop.Show();
-        backdrop.BringToFront();
-        dialog.BringToFront();
-
-        // Title label
-        Label lblTitle = new Label();
-        lblTitle.Text = isAdding ? "Add new word" : "Edit word";
-        lblTitle.Font = new Font("Poppins", 16F, FontStyle.Bold, GraphicsUnit.Point);
-        lblTitle.ForeColor = Color.FromArgb(45, 45, 48);
-        lblTitle.Location = new Point(20, 20);
-        lblTitle.AutoSize = true;
-
-        // Close button
+    private static Button CreateCloseButton(Form dialog)
+    {
         Button btnClose = new Button();
         btnClose.Text = "×";
-        btnClose.Font = new Font("Poppins", 18F, FontStyle.Regular, GraphicsUnit.Point);
+        btnClose.Font = UIFonts.CloseButton;
         btnClose.FlatStyle = FlatStyle.Flat;
         btnClose.FlatAppearance.BorderSize = 0;
         btnClose.BackColor = Color.Transparent;
-        btnClose.ForeColor = Color.FromArgb(100, 100, 100);
-        btnClose.Size = new Size(30, 30);
+        btnClose.ForeColor = UIColors.SecondaryText;
+        btnClose.Size = UILayout.IconButtonSize;
         btnClose.Location = new Point(460, 10);
         btnClose.Cursor = Cursors.Hand;
         btnClose.TextAlign = ContentAlignment.MiddleCenter;
         btnClose.Click += (s, e) => dialog.DialogResult = DialogResult.Cancel;
-        btnClose.MouseEnter += (s, e) => { btnClose.ForeColor = Color.FromArgb(45, 45, 48); btnClose.BackColor = Color.FromArgb(245, 245, 245); };
-        btnClose.MouseLeave += (s, e) => { btnClose.ForeColor = Color.FromArgb(100, 100, 100); btnClose.BackColor = Color.Transparent; };
+        btnClose.MouseEnter += (s, e) => { btnClose.ForeColor = UIColors.DarkText; btnClose.BackColor = UIColors.LightGrayBackground; };
+        btnClose.MouseLeave += (s, e) => { btnClose.ForeColor = UIColors.SecondaryText; btnClose.BackColor = Color.Transparent; };
+        return btnClose;
+    }
+
+    private static Button CreateCancelButton(int x, int y)
+    {
+        Button btnCancel = new Button();
+        btnCancel.Text = "Cancel";
+        btnCancel.Location = new Point(x, y);
+        btnCancel.Size = UILayout.DialogButtonSize;
+        btnCancel.Font = UIFonts.Body;
+        btnCancel.FlatStyle = FlatStyle.Flat;
+        btnCancel.FlatAppearance.BorderSize = 0;
+        btnCancel.BackColor = UIColors.LightButtonBackground;
+        btnCancel.ForeColor = UIColors.DarkText;
+        btnCancel.Cursor = Cursors.Hand;
+        btnCancel.DialogResult = DialogResult.Cancel;
+        btnCancel.TextAlign = ContentAlignment.MiddleCenter;
+        btnCancel.MouseEnter += (s, e) => btnCancel.BackColor = UIColors.LightButtonHover;
+        btnCancel.MouseLeave += (s, e) => btnCancel.BackColor = UIColors.LightButtonBackground;
+        return btnCancel;
+    }
+
+    private static Button CreateSaveButton(int x, int y, bool isAdding)
+    {
+        Button btnSave = new Button();
+        btnSave.Text = isAdding ? "Add" : "Save changes";
+        btnSave.Location = new Point(x, y);
+        btnSave.Size = UILayout.DialogSaveButtonSize;
+        btnSave.Font = UIFonts.Body;
+        btnSave.FlatStyle = FlatStyle.Flat;
+        btnSave.FlatAppearance.BorderSize = 0;
+        btnSave.BackColor = UIColors.DarkPrimary;
+        btnSave.ForeColor = Color.White;
+        btnSave.Cursor = Cursors.Hand;
+        btnSave.DialogResult = DialogResult.OK;
+        btnSave.TextAlign = ContentAlignment.MiddleCenter;
+        btnSave.MouseEnter += (s, e) => btnSave.BackColor = UIColors.DarkHover;
+        btnSave.MouseLeave += (s, e) => btnSave.BackColor = UIColors.DarkPrimary;
+        return btnSave;
+    }
+
+    private static void SetupDialogBorder(Form dialog)
+    {
+        dialog.Paint += (s, e) =>
+        {
+            using (Pen pen = new Pen(UIColors.BorderGray, 1))
+            {
+                Rectangle rect = new Rectangle(0, 0, dialog.Width - 1, dialog.Height - 1);
+                e.Graphics.DrawRectangle(pen, rect);
+            }
+        };
+    }
+
+    private static void ShowDialogWithBackdrop(Form parent, Form backdrop, Form dialog)
+    {
+        backdrop.Show();
+        backdrop.BringToFront();
+        dialog.BringToFront();
+        
+        dialog.FormClosed += (s, e) => 
+        {
+            backdrop.Close();
+            backdrop.Dispose();
+        };
+    }
+    public static DialogResult ShowDictionaryDialog(Form parent, bool isAdding, out string word, string initialWord = "")
+    {
+        word = "";
+        
+        Form dialog = CreateDialogForm(new Size(500, 200));
+        Form backdrop = CreateBackdrop(parent, dialog);
+        
+        // Title label
+        Label lblTitle = new Label();
+        lblTitle.Text = isAdding ? "Add new word" : "Edit word";
+        lblTitle.Font = UIFonts.Heading;
+        lblTitle.ForeColor = UIColors.DarkText;
+        lblTitle.Location = new Point(20, 20);
+        lblTitle.AutoSize = true;
+
+        // Close button
+        Button btnClose = CreateCloseButton(dialog);
 
         // Text input
         TextBox txtWord = new TextBox();
         txtWord.Location = new Point(20, 70);
         txtWord.Size = new Size(460, 25);
-        txtWord.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
+        txtWord.Font = UIFonts.Body;
         txtWord.BorderStyle = BorderStyle.FixedSingle;
         txtWord.Text = initialWord;
         txtWord.SelectAll();
 
-        // Cancel button
-        Button btnCancel = new Button();
-        btnCancel.Text = "Cancel";
-        btnCancel.Location = new Point(290, 130);
-        btnCancel.Size = new Size(80, 28);
-        btnCancel.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
-        btnCancel.FlatStyle = FlatStyle.Flat;
-        btnCancel.FlatAppearance.BorderSize = 0;
-        btnCancel.BackColor = Color.FromArgb(235, 235, 235);
-        btnCancel.ForeColor = Color.FromArgb(45, 45, 48);
-        btnCancel.Cursor = Cursors.Hand;
-        btnCancel.DialogResult = DialogResult.Cancel;
-        btnCancel.TextAlign = ContentAlignment.MiddleCenter;
-        btnCancel.MouseEnter += (s, e) => btnCancel.BackColor = Color.FromArgb(220, 220, 220);
-        btnCancel.MouseLeave += (s, e) => btnCancel.BackColor = Color.FromArgb(235, 235, 235);
-
-        // Save button
-        Button btnSave = new Button();
-        btnSave.Text = isAdding ? "Add" : "Save changes";
-        btnSave.Location = new Point(380, 130);
-        btnSave.Size = new Size(100, 28);
-        btnSave.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
-        btnSave.FlatStyle = FlatStyle.Flat;
-        btnSave.FlatAppearance.BorderSize = 0;
-        btnSave.BackColor = Color.FromArgb(45, 45, 48);
-        btnSave.ForeColor = Color.White;
-        btnSave.Cursor = Cursors.Hand;
-        btnSave.DialogResult = DialogResult.OK;
-        btnSave.TextAlign = ContentAlignment.MiddleCenter;
-        btnSave.MouseEnter += (s, e) => btnSave.BackColor = Color.FromArgb(35, 35, 38);
-        btnSave.MouseLeave += (s, e) => btnSave.BackColor = Color.FromArgb(45, 45, 48);
+        // Cancel and Save buttons
+        Button btnCancel = CreateCancelButton(290, 130);
+        Button btnSave = CreateSaveButton(380, 130, isAdding);
 
         // Add controls
         dialog.Controls.Add(lblTitle);
@@ -109,27 +151,12 @@ public static class DialogService
         dialog.Controls.Add(btnCancel);
         dialog.Controls.Add(btnSave);
 
-        // Draw square border
-        dialog.Paint += (s, e) =>
-        {
-            using (Pen pen = new Pen(Color.FromArgb(200, 200, 200), 1))
-            {
-                Rectangle rect = new Rectangle(0, 0, dialog.Width - 1, dialog.Height - 1);
-                e.Graphics.DrawRectangle(pen, rect);
-            }
-        };
-
-        // Set focus and show
+        // Setup border and show
+        SetupDialogBorder(dialog);
         dialog.AcceptButton = btnSave;
         dialog.CancelButton = btnCancel;
         txtWord.Focus();
-
-        // Close backdrop when dialog closes
-        dialog.FormClosed += (s, e) => 
-        {
-            backdrop.Close();
-            backdrop.Dispose();
-        };
+        ShowDialogWithBackdrop(parent, backdrop, dialog);
 
         DialogResult result = dialog.ShowDialog(parent);
         if (result == DialogResult.OK)
@@ -146,66 +173,25 @@ public static class DialogService
         shortcut = "";
         replacement = "";
         
-        // Create backdrop overlay Form (separate window)
-        Form backdrop = new Form();
-        backdrop.FormBorderStyle = FormBorderStyle.None;
-        backdrop.WindowState = FormWindowState.Normal;
-        backdrop.StartPosition = FormStartPosition.Manual;
-        backdrop.Size = parent.Size;
-        backdrop.Location = parent.Location;
-        backdrop.BackColor = Color.Black;
-        backdrop.Opacity = 0.5;
-        backdrop.ShowInTaskbar = false;
-        backdrop.TopMost = true;
-        backdrop.Enabled = true;
-
-        // Create a Form-based dialog styled like TaskDialog
-        Form dialog = new Form();
-        dialog.Text = "";
-        dialog.FormBorderStyle = FormBorderStyle.None;
-        dialog.Size = new Size(500, 280);
-        dialog.StartPosition = FormStartPosition.CenterParent;
-        dialog.BackColor = Color.White;
-        dialog.ShowInTaskbar = false;
-        dialog.TopMost = true;
+        Form dialog = CreateDialogForm(new Size(500, 280));
+        Form backdrop = CreateBackdrop(parent, dialog);
         
-        // Set backdrop click handler to close dialog
-        backdrop.Click += (s, ev) => dialog.DialogResult = DialogResult.Cancel;
-
-        // Show backdrop first, then dialog
-        backdrop.Show();
-        backdrop.BringToFront();
-        dialog.BringToFront();
-
         // Title label
         Label lblTitle = new Label();
         lblTitle.Text = isAdding ? "Add new snippet" : "Edit snippet";
-        lblTitle.Font = new Font("Poppins", 16F, FontStyle.Bold, GraphicsUnit.Point);
-        lblTitle.ForeColor = Color.FromArgb(45, 45, 48);
+        lblTitle.Font = UIFonts.Heading;
+        lblTitle.ForeColor = UIColors.DarkText;
         lblTitle.Location = new Point(20, 20);
         lblTitle.AutoSize = true;
 
         // Close button
-        Button btnClose = new Button();
-        btnClose.Text = "×";
-        btnClose.Font = new Font("Poppins", 18F, FontStyle.Regular, GraphicsUnit.Point);
-        btnClose.FlatStyle = FlatStyle.Flat;
-        btnClose.FlatAppearance.BorderSize = 0;
-        btnClose.BackColor = Color.Transparent;
-        btnClose.ForeColor = Color.FromArgb(100, 100, 100);
-        btnClose.Size = new Size(30, 30);
-        btnClose.Location = new Point(460, 10);
-        btnClose.Cursor = Cursors.Hand;
-        btnClose.TextAlign = ContentAlignment.MiddleCenter;
-        btnClose.Click += (s, ev) => dialog.DialogResult = DialogResult.Cancel;
-        btnClose.MouseEnter += (s, ev) => { btnClose.ForeColor = Color.FromArgb(45, 45, 48); btnClose.BackColor = Color.FromArgb(245, 245, 245); };
-        btnClose.MouseLeave += (s, ev) => { btnClose.ForeColor = Color.FromArgb(100, 100, 100); btnClose.BackColor = Color.Transparent; };
+        Button btnClose = CreateCloseButton(dialog);
 
         // Shortcut label
         Label lblShortcutLabel = new Label();
         lblShortcutLabel.Text = "Shortcut word:";
-        lblShortcutLabel.Font = new Font("Poppins", 10F, FontStyle.Regular, GraphicsUnit.Point);
-        lblShortcutLabel.ForeColor = Color.FromArgb(45, 45, 48);
+        lblShortcutLabel.Font = UIFonts.Medium;
+        lblShortcutLabel.ForeColor = UIColors.DarkText;
         lblShortcutLabel.Location = new Point(17, 60);
         lblShortcutLabel.AutoSize = true;
 
@@ -213,7 +199,7 @@ public static class DialogService
         TextBox txtShortcut = new TextBox();
         txtShortcut.Location = new Point(20, 80);
         txtShortcut.Size = new Size(460, 25);
-        txtShortcut.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
+        txtShortcut.Font = UIFonts.Body;
         txtShortcut.BorderStyle = BorderStyle.FixedSingle;
         txtShortcut.Text = initialShortcut;
         if (isAdding)
@@ -222,8 +208,8 @@ public static class DialogService
         // Replacement label
         Label lblReplacementLabel = new Label();
         lblReplacementLabel.Text = "Replacement text:";
-        lblReplacementLabel.Font = new Font("Poppins", 10F, FontStyle.Regular, GraphicsUnit.Point);
-        lblReplacementLabel.ForeColor = Color.FromArgb(45, 45, 48);
+        lblReplacementLabel.Font = UIFonts.Medium;
+        lblReplacementLabel.ForeColor = UIColors.DarkText;
         lblReplacementLabel.Location = new Point(17, 115);
         lblReplacementLabel.AutoSize = true;
 
@@ -231,43 +217,15 @@ public static class DialogService
         TextBox txtReplacement = new TextBox();
         txtReplacement.Location = new Point(20, 135);
         txtReplacement.Size = new Size(460, 60);
-        txtReplacement.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
+        txtReplacement.Font = UIFonts.Body;
         txtReplacement.BorderStyle = BorderStyle.FixedSingle;
         txtReplacement.Multiline = true;
         txtReplacement.Text = initialReplacement;
         txtReplacement.ScrollBars = ScrollBars.None;
 
-        // Cancel button
-        Button btnCancel = new Button();
-        btnCancel.Text = "Cancel";
-        btnCancel.Location = new Point(290, 210);
-        btnCancel.Size = new Size(80, 28);
-        btnCancel.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
-        btnCancel.FlatStyle = FlatStyle.Flat;
-        btnCancel.FlatAppearance.BorderSize = 0;
-        btnCancel.BackColor = Color.FromArgb(235, 235, 235);
-        btnCancel.ForeColor = Color.FromArgb(45, 45, 48);
-        btnCancel.Cursor = Cursors.Hand;
-        btnCancel.DialogResult = DialogResult.Cancel;
-        btnCancel.TextAlign = ContentAlignment.MiddleCenter;
-        btnCancel.MouseEnter += (s, ev) => btnCancel.BackColor = Color.FromArgb(220, 220, 220);
-        btnCancel.MouseLeave += (s, ev) => btnCancel.BackColor = Color.FromArgb(235, 235, 235);
-
-        // Save button
-        Button btnSave = new Button();
-        btnSave.Text = isAdding ? "Add" : "Save changes";
-        btnSave.Location = new Point(380, 210);
-        btnSave.Size = new Size(100, 28);
-        btnSave.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
-        btnSave.FlatStyle = FlatStyle.Flat;
-        btnSave.FlatAppearance.BorderSize = 0;
-        btnSave.BackColor = Color.FromArgb(45, 45, 48);
-        btnSave.ForeColor = Color.White;
-        btnSave.Cursor = Cursors.Hand;
-        btnSave.DialogResult = DialogResult.OK;
-        btnSave.TextAlign = ContentAlignment.MiddleCenter;
-        btnSave.MouseEnter += (s, ev) => btnSave.BackColor = Color.FromArgb(35, 35, 38);
-        btnSave.MouseLeave += (s, ev) => btnSave.BackColor = Color.FromArgb(45, 45, 48);
+        // Cancel and Save buttons
+        Button btnCancel = CreateCancelButton(290, 210);
+        Button btnSave = CreateSaveButton(380, 210, isAdding);
 
         // Add controls
         dialog.Controls.Add(lblTitle);
@@ -279,27 +237,12 @@ public static class DialogService
         dialog.Controls.Add(btnCancel);
         dialog.Controls.Add(btnSave);
 
-        // Draw square border
-        dialog.Paint += (s, ev) =>
-        {
-            using (Pen pen = new Pen(Color.FromArgb(200, 200, 200), 1))
-            {
-                Rectangle rect = new Rectangle(0, 0, dialog.Width - 1, dialog.Height - 1);
-                ev.Graphics.DrawRectangle(pen, rect);
-            }
-        };
-
-        // Set focus and show
+        // Setup border and show
+        SetupDialogBorder(dialog);
         dialog.AcceptButton = btnSave;
         dialog.CancelButton = btnCancel;
         txtShortcut.Focus();
-
-        // Close backdrop when dialog closes
-        dialog.FormClosed += (s, ev) => 
-        {
-            backdrop.Close();
-            backdrop.Dispose();
-        };
+        ShowDialogWithBackdrop(parent, backdrop, dialog);
 
         DialogResult result = dialog.ShowDialog(parent);
         if (result == DialogResult.OK)

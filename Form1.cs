@@ -5,7 +5,7 @@ namespace WinFormTest;
 public partial class Form1 : Form
 {
   // SQL Server connection string with Windows Authentication
-  private string connectionString = @"Data Source=localhost\SQLEXPRESS;Initial Catalog=WinFormTest;Integrated Security=True;TrustServerCertificate=True;";
+  private string connectionString = DatabaseConstants.ConnectionString;
 
   public Form1()
   {

@@ -16,9 +16,9 @@ public class TranscriptionFormattingService
       return text;
 
     // Normalize style preference
-    string style = (stylePreference ?? "formal").ToLower();
-    if (style != "formal" && style != "casual" && style != "very_casual")
-      style = "formal";
+    string style = (stylePreference ?? StylePreferences.Default).ToLower();
+    if (style != StylePreferences.Formal && style != StylePreferences.Casual && style != StylePreferences.VeryCasual)
+      style = StylePreferences.Default;
 
     // Step 1: Remove filler words
     string formatted = RemoveFillerWords(text);
@@ -65,7 +65,7 @@ public class TranscriptionFormattingService
     bool hasQuestion = result.Contains('?');
 
     // Remove existing punctuation (except question marks) for processing
-    if (style == "very_casual")
+    if (style == StylePreferences.VeryCasual)
     {
       // Very casual: remove periods and commas, keep question marks
       result = Regex.Replace(result, @"[.,!;:]", "");
@@ -79,7 +79,7 @@ public class TranscriptionFormattingService
     }
 
     // Detect sentence boundaries and add punctuation
-    if (style == "formal" || style == "casual")
+    if (style == StylePreferences.Formal || style == StylePreferences.Casual)
     {
       // Add periods at sentence ends if missing
       result = Regex.Replace(result, @"([a-z])\s+([A-Z])", match =>
@@ -103,7 +103,7 @@ public class TranscriptionFormattingService
       }
 
       // Add commas for formal style (more commas)
-      if (style == "formal")
+      if (style == StylePreferences.Formal)
       {
         // Add comma before conjunctions (and, but, or, so)
         result = Regex.Replace(result, @"\s+(and|but|or|so)\s+", ", $1 ", RegexOptions.IgnoreCase);
@@ -152,7 +152,7 @@ public class TranscriptionFormattingService
 
     string result = text.Trim();
 
-    if (style == "very_casual")
+    if (style == StylePreferences.VeryCasual)
     {
       // Very casual: all lowercase
       result = result.ToLower();

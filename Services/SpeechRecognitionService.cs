@@ -1,7 +1,6 @@
 using Whisper.net;
 using Whisper.net.Ggml;
 using NAudio.Wave;
-using NAudio.Wave.SampleProviders;
 using System.Collections.Generic;
 
 namespace WinFormTest;
@@ -383,7 +382,10 @@ public class SpeechRecognitionService : IDisposable
                         segments.Add(text);
                       }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                      System.Diagnostics.Debug.WriteLine($"Failed to extract text from segment: {ex.Message}");
+                    }
                   }
                 }
               }
@@ -402,11 +404,15 @@ public class SpeechRecognitionService : IDisposable
             if (File.Exists(tempFile))
               File.Delete(tempFile);
           }
-          catch { }
+          catch (Exception ex)
+          {
+            System.Diagnostics.Debug.WriteLine($"Failed to delete temp file: {ex.Message}");
+          }
         }
       }
-      catch
+      catch (Exception ex)
       {
+        System.Diagnostics.Debug.WriteLine($"Speech recognition error: {ex.Message}");
         // Ignore errors
       }
       finally

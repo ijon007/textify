@@ -77,6 +77,17 @@ public class GlobalHotkeyManager : IDisposable
   private const int WM_KEYDOWN = 0x0100;
   private const int WM_KEYUP = 0x0101;
 
+  // Virtual key codes for modifier keys
+  private const int VK_LCONTROL = 0xA2;  // Left Control
+  private const int VK_RCONTROL = 0xA3;  // Right Control
+  private const int VK_LMENU = 0xA4;     // Left Alt
+  private const int VK_RMENU = 0xA5;     // Right Alt
+  private const int VK_LSHIFT = 0xA0;    // Left Shift
+  private const int VK_RSHIFT = 0xA1;    // Right Shift
+  private const int VK_LWIN = 0x5B;      // Left Windows key
+  private const int VK_RWIN = 0x5C;      // Right Windows key
+  private const int KEY_STATE_MASK = 0x8000; // Key pressed mask
+
   [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
   private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
 
@@ -120,6 +131,59 @@ public class GlobalHotkeyManager : IDisposable
   [DllImport("user32.dll")]
   private static extern short GetAsyncKeyState(int vKey);
 
+  // Helper methods to check modifier key states
+  private static bool IsCtrlPressed()
+  {
+    return (GetAsyncKeyState(VK_LCONTROL) & KEY_STATE_MASK) != 0 ||
+           (GetAsyncKeyState(VK_RCONTROL) & KEY_STATE_MASK) != 0;
+  }
+
+  private static bool IsAltPressed()
+  {
+    return (GetAsyncKeyState(VK_LMENU) & KEY_STATE_MASK) != 0 ||
+           (GetAsyncKeyState(VK_RMENU) & KEY_STATE_MASK) != 0;
+  }
+
+  private static bool IsShiftPressed()
+  {
+    return (GetAsyncKeyState(VK_LSHIFT) & KEY_STATE_MASK) != 0 ||
+           (GetAsyncKeyState(VK_RSHIFT) & KEY_STATE_MASK) != 0;
+  }
+
+  private static bool IsWinPressed()
+  {
+    return (GetAsyncKeyState(VK_LWIN) & KEY_STATE_MASK) != 0 ||
+           (GetAsyncKeyState(VK_RWIN) & KEY_STATE_MASK) != 0;
+  }
+
+  private static bool IsModifierKey(int vkCode)
+  {
+    return vkCode == VK_LCONTROL || vkCode == VK_RCONTROL ||
+           vkCode == VK_LMENU || vkCode == VK_RMENU ||
+           vkCode == VK_LSHIFT || vkCode == VK_RSHIFT ||
+           vkCode == VK_LWIN || vkCode == VK_RWIN;
+  }
+
+  private static bool IsCtrlKey(int vkCode)
+  {
+    return vkCode == VK_LCONTROL || vkCode == VK_RCONTROL;
+  }
+
+  private static bool IsAltKey(int vkCode)
+  {
+    return vkCode == VK_LMENU || vkCode == VK_RMENU;
+  }
+
+  private static bool IsShiftKey(int vkCode)
+  {
+    return vkCode == VK_LSHIFT || vkCode == VK_RSHIFT;
+  }
+
+  private static bool IsWinKey(int vkCode)
+  {
+    return vkCode == VK_LWIN || vkCode == VK_RWIN;
+  }
+
   private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
   {
     if (nCode >= 0)
@@ -127,10 +191,10 @@ public class GlobalHotkeyManager : IDisposable
       int vkCode = Marshal.ReadInt32(lParam);
       
       // Check current state of modifier keys
-      bool ctrlPressed = (GetAsyncKeyState(0xA2) & 0x8000) != 0 || (GetAsyncKeyState(0xA3) & 0x8000) != 0;
-      bool altPressed = (GetAsyncKeyState(0xA4) & 0x8000) != 0 || (GetAsyncKeyState(0xA5) & 0x8000) != 0;
-      bool shiftPressed = (GetAsyncKeyState(0xA0) & 0x8000) != 0 || (GetAsyncKeyState(0xA1) & 0x8000) != 0;
-      bool winPressed = (GetAsyncKeyState(0x5B) & 0x8000) != 0 || (GetAsyncKeyState(0x5C) & 0x8000) != 0;
+      bool ctrlPressed = IsCtrlPressed();
+      bool altPressed = IsAltPressed();
+      bool shiftPressed = IsShiftPressed();
+      bool winPressed = IsWinPressed();
 
       // Check if all required modifiers are pressed
       bool modifiersMatch = 
@@ -145,10 +209,7 @@ public class GlobalHotkeyManager : IDisposable
       if (wParam.ToInt32() == WM_KEYDOWN)
       {
         // Check if this is a modifier key or the required key being pressed
-        bool isModifierKey = (vkCode == 0xA2 || vkCode == 0xA3 || // Ctrl
-                              vkCode == 0xA4 || vkCode == 0xA5 || // Alt
-                              vkCode == 0xA0 || vkCode == 0xA1 || // Shift
-                              vkCode == 0x5B || vkCode == 0x5C);  // Win
+        bool isModifierKey = IsModifierKey(vkCode);
         
         bool isRequiredKey = requireKeyCode.HasValue && vkCode == requireKeyCode.Value;
 
@@ -157,10 +218,10 @@ public class GlobalHotkeyManager : IDisposable
           // Small delay to ensure all keys are registered
           Task.Delay(10).ContinueWith(_ =>
           {
-            bool ctrlNow = (GetAsyncKeyState(0xA2) & 0x8000) != 0 || (GetAsyncKeyState(0xA3) & 0x8000) != 0;
-            bool altNow = (GetAsyncKeyState(0xA4) & 0x8000) != 0 || (GetAsyncKeyState(0xA5) & 0x8000) != 0;
-            bool shiftNow = (GetAsyncKeyState(0xA0) & 0x8000) != 0 || (GetAsyncKeyState(0xA1) & 0x8000) != 0;
-            bool winNow = (GetAsyncKeyState(0x5B) & 0x8000) != 0 || (GetAsyncKeyState(0x5C) & 0x8000) != 0;
+            bool ctrlNow = IsCtrlPressed();
+            bool altNow = IsAltPressed();
+            bool shiftNow = IsShiftPressed();
+            bool winNow = IsWinPressed();
             
             bool modifiersMatchNow = 
               (!requireCtrl || ctrlNow) &&
@@ -193,10 +254,10 @@ public class GlobalHotkeyManager : IDisposable
       {
         if (isPressed)
         {
-          bool ctrlStill = (GetAsyncKeyState(0xA2) & 0x8000) != 0 || (GetAsyncKeyState(0xA3) & 0x8000) != 0;
-          bool altStill = (GetAsyncKeyState(0xA4) & 0x8000) != 0 || (GetAsyncKeyState(0xA5) & 0x8000) != 0;
-          bool shiftStill = (GetAsyncKeyState(0xA0) & 0x8000) != 0 || (GetAsyncKeyState(0xA1) & 0x8000) != 0;
-          bool winStill = (GetAsyncKeyState(0x5B) & 0x8000) != 0 || (GetAsyncKeyState(0x5C) & 0x8000) != 0;
+          bool ctrlStill = IsCtrlPressed();
+          bool altStill = IsAltPressed();
+          bool shiftStill = IsShiftPressed();
+          bool winStill = IsWinPressed();
           
           bool modifiersStillMatch = 
             (!requireCtrl || ctrlStill) &&
@@ -205,10 +266,10 @@ public class GlobalHotkeyManager : IDisposable
             (!requireWin || winStill);
           
           // Check if any required modifier was released
-          bool ctrlReleased = requireCtrl && (vkCode == 0xA2 || vkCode == 0xA3);
-          bool altReleased = requireAlt && (vkCode == 0xA4 || vkCode == 0xA5);
-          bool shiftReleased = requireShift && (vkCode == 0xA0 || vkCode == 0xA1);
-          bool winReleased = requireWin && (vkCode == 0x5B || vkCode == 0x5C);
+          bool ctrlReleased = requireCtrl && IsCtrlKey(vkCode);
+          bool altReleased = requireAlt && IsAltKey(vkCode);
+          bool shiftReleased = requireShift && IsShiftKey(vkCode);
+          bool winReleased = requireWin && IsWinKey(vkCode);
           bool keyReleased = requireKeyCode.HasValue && vkCode == requireKeyCode.Value;
           
           if (!modifiersStillMatch || ctrlReleased || altReleased || shiftReleased || winReleased || keyReleased)

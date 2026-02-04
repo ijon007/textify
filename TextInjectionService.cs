@@ -53,7 +53,10 @@ public class TextInjectionService
       {
         originalClipboard = Clipboard.GetText();
       }
-      catch { }
+      catch (Exception ex)
+      {
+        System.Diagnostics.Debug.WriteLine($"Failed to read clipboard: {ex.Message}");
+      }
 
       // Clear and set text to clipboard
       Clipboard.Clear();
@@ -67,7 +70,10 @@ public class TextInjectionService
       {
         verifyClipboard = Clipboard.GetText();
       }
-      catch { }
+      catch (Exception ex)
+      {
+        System.Diagnostics.Debug.WriteLine($"Failed to verify clipboard: {ex.Message}");
+      }
 
       if (verifyClipboard != text)
       {
@@ -103,7 +109,10 @@ public class TextInjectionService
             Clipboard.Clear();
           }
         }
-        catch { }
+        catch (Exception ex)
+        {
+          System.Diagnostics.Debug.WriteLine($"Failed to restore clipboard: {ex.Message}");
+        }
       });
     }
     catch (Exception ex)
@@ -114,7 +123,10 @@ public class TextInjectionService
       {
         Clipboard.SetText(text);
       }
-      catch { }
+      catch (Exception ex2)
+      {
+        System.Diagnostics.Debug.WriteLine($"Failed to set clipboard as fallback: {ex2.Message}");
+      }
     }
   }
 
@@ -127,6 +139,9 @@ public class TextInjectionService
         WindowsApiHelper.SetForegroundWindow(originalForegroundWindow);
       }
     }
-    catch { }
+    catch (Exception ex)
+    {
+      System.Diagnostics.Debug.WriteLine($"Failed to restore focus: {ex.Message}");
+    }
   }
 }
