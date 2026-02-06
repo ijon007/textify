@@ -72,3 +72,12 @@ C:\Users\user\Desktop\desktop-apps\WinFormTest\bin\Debug\net10.0-windows\runtime
 C:\Users\user\Desktop\desktop-apps\WinFormTest\bin\Debug\net10.0-windows\Microsoft.Extensions.AI.Abstractions.dll
 C:\Users\user\Desktop\desktop-apps\WinFormTest\bin\Debug\net10.0-windows\Whisper.net.dll
 C:\Users\user\Desktop\desktop-apps\WinFormTest\bin\Debug\net10.0-windows\models\ggml-base.bin
+C:\Users\User\Desktop\speechify\obj\Debug\net10.0-windows\WinFormTest.csproj.AssemblyReference.cache
+C:\Users\User\Desktop\speechify\obj\Debug\net10.0-windows\WinFormTest.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Desktop\speechify\obj\Debug\net10.0-windows\WinFormTest.AssemblyInfoInputs.cache
+C:\Users\User\Desktop\speechify\obj\Debug\net10.0-windows\WinFormTest.AssemblyInfo.cs
+C:\Users\User\Desktop\speechify\obj\Debug\net10.0-windows\WinFormTest.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\speechify\obj\Debug\net10.0-windows\WinFormTest.sourcelink.json
+C:\Users\User\Desktop\speechify\obj\Debug\net10.0-windows\WinFormTest.dll
+C:\Users\User\Desktop\speechify\obj\Debug\net10.0-windows\refint\WinFormTest.dll
+C:\Users\User\Desktop\speechify\obj\Debug\net10.0-windows\WinFormTest.pdb
