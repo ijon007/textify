@@ -21,7 +21,8 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        
+        EnsureSpeechesTableExists(connection);
+
         string query = "INSERT INTO Speeches (Username, SpeechText, CreatedAt, Duration) VALUES (@username, @speechText, @createdAt, @duration)";
         
         using (SqlCommand command = new SqlCommand(query, connection))
@@ -55,7 +56,8 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        
+        EnsureSpeechesTableExists(connection);
+
         string query = @"
           SELECT TOP (@limit) Id, CreatedAt, SpeechText 
           FROM Speeches 
@@ -287,6 +289,38 @@ public class DatabaseService
     }
   }
 
+  private static void EnsureSpeechesTableExists(SqlConnection connection)
+  {
+    string createSpeeches = @"
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Speeches' AND schema_id = SCHEMA_ID('dbo'))
+      CREATE TABLE dbo.Speeches ( Id INT IDENTITY(1,1) PRIMARY KEY, Username NVARCHAR(255) NOT NULL, SpeechText NVARCHAR(MAX) NOT NULL, CreatedAt DATETIME NOT NULL, Duration INT NULL );";
+    using (var cmd = new SqlCommand(createSpeeches, connection))
+      cmd.ExecuteNonQuery();
+  }
+
+  private static void EnsureDictionaryAndSnippetsTablesExist(SqlConnection connection)
+  {
+    string createDictionary = @"
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Dictionary' AND schema_id = SCHEMA_ID('dbo'))
+      CREATE TABLE dbo.[Dictionary] ( Id INT IDENTITY(1,1) PRIMARY KEY, Username NVARCHAR(255) NOT NULL, Word NVARCHAR(255) NOT NULL, CreatedAt DATETIME NOT NULL, UpdatedAt DATETIME NULL );";
+    string createSnippets = @"
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Snippets' AND schema_id = SCHEMA_ID('dbo'))
+      CREATE TABLE dbo.Snippets ( Id INT IDENTITY(1,1) PRIMARY KEY, Username NVARCHAR(255) NOT NULL, Shortcut NVARCHAR(255) NOT NULL, Replacement NVARCHAR(MAX) NOT NULL, CreatedAt DATETIME NOT NULL, UpdatedAt DATETIME NULL );";
+    using (var cmd = new SqlCommand(createDictionary, connection))
+      cmd.ExecuteNonQuery();
+    using (var cmd = new SqlCommand(createSnippets, connection))
+      cmd.ExecuteNonQuery();
+  }
+
+  private static void EnsureUserSettingsTableExists(SqlConnection connection)
+  {
+    string createUserSettings = @"
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'UserSettings' AND schema_id = SCHEMA_ID('dbo'))
+      CREATE TABLE dbo.UserSettings ( Id INT IDENTITY(1,1) PRIMARY KEY, Username NVARCHAR(255) NOT NULL, StylePreference NVARCHAR(50) NOT NULL DEFAULT 'formal', CreatedAt DATETIME NOT NULL, UpdatedAt DATETIME NULL );";
+    using (var cmd = new SqlCommand(createUserSettings, connection))
+      cmd.ExecuteNonQuery();
+  }
+
   public int AddDictionaryEntry(string username, string word)
   {
     if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(word))
@@ -297,9 +331,10 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
+        EnsureDictionaryAndSnippetsTablesExist(connection);
         
         // Check for duplicate word for this user
-        string checkQuery = "SELECT COUNT(*) FROM Dictionary WHERE Username = @username AND Word = @word";
+        string checkQuery = "SELECT COUNT(*) FROM dbo.[Dictionary] WHERE Username = @username AND Word = @word";
         using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
         {
           checkCommand.Parameters.AddWithValue("@username", username);
@@ -313,7 +348,7 @@ public class DatabaseService
         }
         
         // Insert new entry
-        string insertQuery = "INSERT INTO Dictionary (Username, Word, CreatedAt) OUTPUT INSERTED.Id VALUES (@username, @word, @createdAt)";
+        string insertQuery = "INSERT INTO dbo.[Dictionary] (Username, Word, CreatedAt) OUTPUT INSERTED.Id VALUES (@username, @word, @createdAt)";
         
         using (SqlCommand command = new SqlCommand(insertQuery, connection))
         {
@@ -342,10 +377,11 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
+        EnsureDictionaryAndSnippetsTablesExist(connection);
         
         string query = @"
           SELECT Id, Word, CreatedAt 
-          FROM Dictionary 
+          FROM dbo.[Dictionary] 
           WHERE Username = @username 
           ORDER BY CreatedAt DESC";
         
@@ -385,9 +421,10 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
+        EnsureDictionaryAndSnippetsTablesExist(connection);
         
         // Verify entry belongs to user
-        string verifyQuery = "SELECT COUNT(*) FROM Dictionary WHERE Id = @id AND Username = @username";
+        string verifyQuery = "SELECT COUNT(*) FROM dbo.[Dictionary] WHERE Id = @id AND Username = @username";
         using (SqlCommand verifyCommand = new SqlCommand(verifyQuery, connection))
         {
           verifyCommand.Parameters.AddWithValue("@id", id);
@@ -401,7 +438,7 @@ public class DatabaseService
         }
         
         // Check for duplicate word (excluding current entry)
-        string checkQuery = "SELECT COUNT(*) FROM Dictionary WHERE Username = @username AND Word = @word AND Id != @id";
+        string checkQuery = "SELECT COUNT(*) FROM dbo.[Dictionary] WHERE Username = @username AND Word = @word AND Id != @id";
         using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
         {
           checkCommand.Parameters.AddWithValue("@username", username);
@@ -416,7 +453,7 @@ public class DatabaseService
         }
         
         // Update entry
-        string updateQuery = "UPDATE Dictionary SET Word = @word, UpdatedAt = @updatedAt WHERE Id = @id AND Username = @username";
+        string updateQuery = "UPDATE dbo.[Dictionary] SET Word = @word, UpdatedAt = @updatedAt WHERE Id = @id AND Username = @username";
         
         using (SqlCommand command = new SqlCommand(updateQuery, connection))
         {
@@ -450,9 +487,10 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
+        EnsureDictionaryAndSnippetsTablesExist(connection);
         
         // Verify entry belongs to user
-        string verifyQuery = "SELECT COUNT(*) FROM Dictionary WHERE Id = @id AND Username = @username";
+        string verifyQuery = "SELECT COUNT(*) FROM dbo.[Dictionary] WHERE Id = @id AND Username = @username";
         using (SqlCommand verifyCommand = new SqlCommand(verifyQuery, connection))
         {
           verifyCommand.Parameters.AddWithValue("@id", id);
@@ -466,7 +504,7 @@ public class DatabaseService
         }
         
         // Delete entry
-        string deleteQuery = "DELETE FROM Dictionary WHERE Id = @id AND Username = @username";
+        string deleteQuery = "DELETE FROM dbo.[Dictionary] WHERE Id = @id AND Username = @username";
         
         using (SqlCommand command = new SqlCommand(deleteQuery, connection))
         {
@@ -500,9 +538,10 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
+        EnsureDictionaryAndSnippetsTablesExist(connection);
         
         // Check for duplicate shortcut for this user
-        string checkQuery = "SELECT COUNT(*) FROM Snippets WHERE Username = @username AND Shortcut = @shortcut";
+        string checkQuery = "SELECT COUNT(*) FROM dbo.Snippets WHERE Username = @username AND Shortcut = @shortcut";
         using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
         {
           checkCommand.Parameters.AddWithValue("@username", username);
@@ -516,7 +555,7 @@ public class DatabaseService
         }
         
         // Insert new snippet
-        string insertQuery = "INSERT INTO Snippets (Username, Shortcut, Replacement, CreatedAt) OUTPUT INSERTED.Id VALUES (@username, @shortcut, @replacement, @createdAt)";
+        string insertQuery = "INSERT INTO dbo.Snippets (Username, Shortcut, Replacement, CreatedAt) OUTPUT INSERTED.Id VALUES (@username, @shortcut, @replacement, @createdAt)";
         
         using (SqlCommand command = new SqlCommand(insertQuery, connection))
         {
@@ -546,10 +585,11 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
+        EnsureDictionaryAndSnippetsTablesExist(connection);
         
         string query = @"
           SELECT Id, Shortcut, Replacement, CreatedAt 
-          FROM Snippets 
+          FROM dbo.Snippets 
           WHERE Username = @username 
           ORDER BY CreatedAt DESC";
         
@@ -590,9 +630,10 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
+        EnsureDictionaryAndSnippetsTablesExist(connection);
         
         // Verify entry belongs to user
-        string verifyQuery = "SELECT COUNT(*) FROM Snippets WHERE Id = @id AND Username = @username";
+        string verifyQuery = "SELECT COUNT(*) FROM dbo.Snippets WHERE Id = @id AND Username = @username";
         using (SqlCommand verifyCommand = new SqlCommand(verifyQuery, connection))
         {
           verifyCommand.Parameters.AddWithValue("@id", id);
@@ -606,7 +647,7 @@ public class DatabaseService
         }
         
         // Check for duplicate shortcut (excluding current entry)
-        string checkQuery = "SELECT COUNT(*) FROM Snippets WHERE Username = @username AND Shortcut = @shortcut AND Id != @id";
+        string checkQuery = "SELECT COUNT(*) FROM dbo.Snippets WHERE Username = @username AND Shortcut = @shortcut AND Id != @id";
         using (SqlCommand checkCommand = new SqlCommand(checkQuery, connection))
         {
           checkCommand.Parameters.AddWithValue("@username", username);
@@ -621,7 +662,7 @@ public class DatabaseService
         }
         
         // Update snippet
-        string updateQuery = "UPDATE Snippets SET Shortcut = @shortcut, Replacement = @replacement, UpdatedAt = @updatedAt WHERE Id = @id AND Username = @username";
+        string updateQuery = "UPDATE dbo.Snippets SET Shortcut = @shortcut, Replacement = @replacement, UpdatedAt = @updatedAt WHERE Id = @id AND Username = @username";
         
         using (SqlCommand command = new SqlCommand(updateQuery, connection))
         {
@@ -656,9 +697,10 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
+        EnsureDictionaryAndSnippetsTablesExist(connection);
         
         // Verify entry belongs to user
-        string verifyQuery = "SELECT COUNT(*) FROM Snippets WHERE Id = @id AND Username = @username";
+        string verifyQuery = "SELECT COUNT(*) FROM dbo.Snippets WHERE Id = @id AND Username = @username";
         using (SqlCommand verifyCommand = new SqlCommand(verifyQuery, connection))
         {
           verifyCommand.Parameters.AddWithValue("@id", id);
@@ -672,7 +714,7 @@ public class DatabaseService
         }
         
         // Delete snippet
-        string deleteQuery = "DELETE FROM Snippets WHERE Id = @id AND Username = @username";
+        string deleteQuery = "DELETE FROM dbo.Snippets WHERE Id = @id AND Username = @username";
         
         using (SqlCommand command = new SqlCommand(deleteQuery, connection))
         {
@@ -706,7 +748,8 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        
+        EnsureUserSettingsTableExists(connection);
+
         string query = "SELECT StylePreference FROM UserSettings WHERE Username = @username";
         
         using (SqlCommand command = new SqlCommand(query, connection))
@@ -743,7 +786,8 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        
+        EnsureUserSettingsTableExists(connection);
+
         bool exists = UserSettingsExists(connection, username);
         
         if (exists)
@@ -789,7 +833,8 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        
+        EnsureUserSettingsTableExists(connection);
+
         // Check if columns exist first (for backward compatibility)
         string checkColumnsQuery = @"
           SELECT COLUMN_NAME 
@@ -884,7 +929,8 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        
+        EnsureUserSettingsTableExists(connection);
+
         // Check if columns exist first (for backward compatibility)
         string checkColumnsQuery = @"
           SELECT COLUMN_NAME 
@@ -991,64 +1037,69 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        
-        string[] columnsToAdd = new[]
-        {
-          "MicrophoneDeviceId", "NVARCHAR(100)",
-          "OverlayPosition", "NVARCHAR(50)",
-          "StartMinimized", "BIT",
-          "MinimizeToTray", "BIT"
-        };
-
-        // Check existing columns
-        string checkColumnsQuery = @"
-          SELECT COLUMN_NAME 
-          FROM INFORMATION_SCHEMA.COLUMNS 
-          WHERE TABLE_NAME = 'UserSettings'";
-        
-        var existingColumns = new HashSet<string>();
-        using (SqlCommand checkCmd = new SqlCommand(checkColumnsQuery, connection))
-        {
-          using (SqlDataReader reader = checkCmd.ExecuteReader())
-          {
-            while (reader.Read())
-            {
-              existingColumns.Add(reader.GetString(0));
-            }
-          }
-        }
-
-        // Add missing columns
-        for (int i = 0; i < columnsToAdd.Length; i += 2)
-        {
-          string columnName = columnsToAdd[i];
-          string columnType = columnsToAdd[i + 1];
-          
-          if (!existingColumns.Contains(columnName))
-          {
-            string defaultValue = "";
-            if (columnType == "BIT")
-            {
-              defaultValue = " DEFAULT 0";
-            }
-            else if (columnType == "NVARCHAR(50)" && columnName == "OverlayPosition")
-            {
-              defaultValue = " DEFAULT 'bottom_center'";
-            }
-
-            string alterQuery = $"ALTER TABLE UserSettings ADD {columnName} {columnType}{defaultValue}";
-            using (SqlCommand alterCmd = new SqlCommand(alterQuery, connection))
-            {
-              alterCmd.ExecuteNonQuery();
-            }
-          }
-        }
+        EnsureUserSettingsTableExists(connection);
+        EnsureSettingsColumnsExist(connection);
       }
     }
     catch (Exception ex)
     {
       System.Diagnostics.Debug.WriteLine($"Failed to ensure settings columns exist: {ex.Message}");
       // Don't throw - allow app to continue with defaults
+    }
+  }
+
+  private static void EnsureSettingsColumnsExist(SqlConnection connection)
+  {
+    string[] columnsToAdd = new[]
+    {
+      "MicrophoneDeviceId", "NVARCHAR(100)",
+      "OverlayPosition", "NVARCHAR(50)",
+      "StartMinimized", "BIT",
+      "MinimizeToTray", "BIT"
+    };
+
+    // Check existing columns
+    string checkColumnsQuery = @"
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_NAME = 'UserSettings'";
+
+    var existingColumns = new HashSet<string>();
+    using (SqlCommand checkCmd = new SqlCommand(checkColumnsQuery, connection))
+    {
+      using (SqlDataReader reader = checkCmd.ExecuteReader())
+      {
+        while (reader.Read())
+        {
+          existingColumns.Add(reader.GetString(0));
+        }
+      }
+    }
+
+    // Add missing columns
+    for (int i = 0; i < columnsToAdd.Length; i += 2)
+    {
+      string columnName = columnsToAdd[i];
+      string columnType = columnsToAdd[i + 1];
+
+      if (!existingColumns.Contains(columnName))
+      {
+        string defaultValue = "";
+        if (columnType == "BIT")
+        {
+          defaultValue = " DEFAULT 0";
+        }
+        else if (columnType == "NVARCHAR(50)" && columnName == "OverlayPosition")
+        {
+          defaultValue = " DEFAULT 'bottom_center'";
+        }
+
+        string alterQuery = $"ALTER TABLE UserSettings ADD {columnName} {columnType}{defaultValue}";
+        using (SqlCommand alterCmd = new SqlCommand(alterQuery, connection))
+        {
+          alterCmd.ExecuteNonQuery();
+        }
+      }
     }
   }
 
@@ -1060,10 +1111,11 @@ public class DatabaseService
 
     try
     {
-      EnsureSettingsColumnsExist();
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
+        EnsureUserSettingsTableExists(connection);
+        EnsureSettingsColumnsExist(connection);
         string query = "SELECT MicrophoneDeviceId FROM UserSettings WHERE Username = @username";
         using (SqlCommand command = new SqlCommand(query, connection))
         {
@@ -1088,10 +1140,11 @@ public class DatabaseService
 
     try
     {
-      EnsureSettingsColumnsExist();
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
+        EnsureUserSettingsTableExists(connection);
+        EnsureSettingsColumnsExist(connection);
         bool exists = UserSettingsExists(connection, username);
 
         if (exists)
@@ -1326,7 +1379,8 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        string deleteQuery = "DELETE FROM Dictionary WHERE Username = @username";
+        EnsureDictionaryAndSnippetsTablesExist(connection);
+        string deleteQuery = "DELETE FROM dbo.[Dictionary] WHERE Username = @username";
         using (SqlCommand command = new SqlCommand(deleteQuery, connection))
         {
           command.Parameters.AddWithValue("@username", username);
@@ -1351,7 +1405,8 @@ public class DatabaseService
       using (SqlConnection connection = new SqlConnection(connectionString))
       {
         connection.Open();
-        string deleteQuery = "DELETE FROM Snippets WHERE Username = @username";
+        EnsureDictionaryAndSnippetsTablesExist(connection);
+        string deleteQuery = "DELETE FROM dbo.Snippets WHERE Username = @username";
         using (SqlCommand command = new SqlCommand(deleteQuery, connection))
         {
           command.Parameters.AddWithValue("@username", username);

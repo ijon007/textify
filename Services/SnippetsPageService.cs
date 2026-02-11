@@ -14,6 +14,7 @@ public class SnippetsPageService
     private Button? btnAddNewSnippet;
     private Panel? panelSnippetsList;
     private Label? lblEmptySnippets;
+    private DataGridView? dgvSnippets;
     private int? editingSnippetId;
 
     public SnippetsPageService(
@@ -69,6 +70,44 @@ public class SnippetsPageService
         panelSnippetsList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         panelSnippetsList.Padding = new Padding(0, 0, 0, 10);
         panelSnippetsList.Name = "panelSnippetsList";
+
+        // DataGridView for snippets (with action buttons)
+        dgvSnippets = new DataGridView();
+        dgvSnippets.Name = "dgvSnippets";
+        dgvSnippets.BackgroundColor = Color.White;
+        dgvSnippets.BorderStyle = BorderStyle.None;
+        dgvSnippets.Dock = DockStyle.Fill;
+        dgvSnippets.AllowUserToAddRows = false;
+        dgvSnippets.AllowUserToDeleteRows = false;
+        dgvSnippets.ReadOnly = true;
+        dgvSnippets.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        dgvSnippets.MultiSelect = false;
+        dgvSnippets.RowHeadersVisible = false;
+        dgvSnippets.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        dgvSnippets.Font = new Font("Poppins", 9F, FontStyle.Regular, GraphicsUnit.Point);
+        dgvSnippets.ColumnHeadersHeight = 36;
+        dgvSnippets.RowTemplate.Height = 44;
+        dgvSnippets.DefaultCellStyle.SelectionBackColor = Color.FromArgb(240, 240, 240);
+        dgvSnippets.DefaultCellStyle.SelectionForeColor = UIColors.DarkText;
+        dgvSnippets.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(248, 248, 248);
+        dgvSnippets.ColumnHeadersDefaultCellStyle.ForeColor = UIColors.DarkText;
+        dgvSnippets.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(248, 248, 248);
+        dgvSnippets.ColumnHeadersDefaultCellStyle.SelectionForeColor = UIColors.DarkText;
+        dgvSnippets.ColumnHeadersDefaultCellStyle.Font = new Font("Poppins", 10F, FontStyle.Regular, GraphicsUnit.Point);
+        dgvSnippets.EnableHeadersVisualStyles = false;
+        dgvSnippets.CellContentClick += DgvSnippets_CellContentClick;
+
+        var colId = new DataGridViewTextBoxColumn { Name = "Id", HeaderText = "Id", Visible = false };
+        var colShortcut = new DataGridViewTextBoxColumn { Name = "Shortcut", HeaderText = "Shortcut", ReadOnly = true };
+        var colReplacement = new DataGridViewTextBoxColumn { Name = "Replacement", HeaderText = "Replacement", ReadOnly = true };
+        var colEdit = new DataGridViewButtonColumn { Name = "Edit", HeaderText = "", Text = "✏️", UseColumnTextForButtonValue = true, Width = 50 };
+        var colDelete = new DataGridViewButtonColumn { Name = "Delete", HeaderText = "", Text = "🗑️", UseColumnTextForButtonValue = true, Width = 50 };
+
+        dgvSnippets.Columns.Add(colId);
+        dgvSnippets.Columns.Add(colShortcut);
+        dgvSnippets.Columns.Add(colReplacement);
+        dgvSnippets.Columns.Add(colEdit);
+        dgvSnippets.Columns.Add(colDelete);
 
         // Empty State Label
         lblEmptySnippets = new Label();
@@ -137,95 +176,42 @@ public class SnippetsPageService
 
     public void LoadSnippetsEntries()
     {
-        if (databaseService == null || panelSnippetsList == null)
+        if (databaseService == null || panelSnippetsList == null || dgvSnippets == null)
             return;
 
-        // Clear existing entries
         panelSnippetsList.Controls.Clear();
 
         var snippets = databaseService.GetSnippets(username);
 
         if (snippets.Count == 0)
         {
-            // Show empty state
             if (lblEmptySnippets != null)
             {
                 panelSnippetsList.Controls.Add(lblEmptySnippets);
                 lblEmptySnippets.Location = new Point((panelSnippetsList.Width - lblEmptySnippets.Width) / 2, 50);
+                lblEmptySnippets.Show();
             }
             return;
         }
 
-        // Hide empty state
         lblEmptySnippets?.Hide();
-
-        int yOffset = 10;
-        const int spacingBetweenItems = 0;
-        const int fixedPanelHeight = 60;
-
-        foreach (var snippet in snippets)
-        {
-            CreateSnippetRow(snippet.id, snippet.shortcut, snippet.replacement, yOffset);
-            yOffset += fixedPanelHeight + spacingBetweenItems;
-        }
+        dgvSnippets.Rows.Clear();
+        foreach (var s in snippets)
+            dgvSnippets.Rows.Add(s.id, s.shortcut, s.replacement, "✏️", "🗑️");
+        panelSnippetsList.Controls.Add(dgvSnippets);
     }
 
-    private void CreateSnippetRow(int id, string shortcut, string replacement, int yOffset)
+    private void DgvSnippets_CellContentClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (panelSnippetsList == null)
+        if (dgvSnippets == null || e.RowIndex < 0)
             return;
-
-        int availableWidth = panelSnippetsList.ClientSize.Width - 20;
-        const int fixedPanelHeight = 60;
-
-        // Create container panel
-        ClippingPanel entryPanel = new ClippingPanel();
-        entryPanel.BackColor = Color.White;
-        entryPanel.Location = new Point(10, yOffset);
-        entryPanel.Size = new Size(availableWidth, fixedPanelHeight);
-        entryPanel.Name = $"panelEntry_{id}";
-        entryPanel.Paint += UIStylingService.DrawEntryPanelBottomBorder;
-        entryPanel.AutoSize = false;
-
-        // Create shortcut label
-        Label lblShortcut = new Label();
-        lblShortcut.Text = shortcut;
-        lblShortcut.Font = new Font("Poppins", 11F, FontStyle.Regular, GraphicsUnit.Point);
-        lblShortcut.ForeColor = UIColors.DarkText;
-        lblShortcut.BackColor = Color.White;
-        lblShortcut.Location = new Point(10, 10);
-        lblShortcut.AutoSize = false;
-        lblShortcut.Size = new Size(availableWidth - 200, 20);
-        lblShortcut.Name = $"lblShortcut_{id}";
-        lblShortcut.TextAlign = ContentAlignment.MiddleLeft;
-
-        // Create replacement preview label (truncated)
-        string displayReplacement = replacement.Length > 60 ? replacement.Substring(0, 57) + "..." : replacement;
-        Label lblReplacement = new Label();
-        lblReplacement.Text = displayReplacement;
-        lblReplacement.Font = new Font("Poppins", 9F, FontStyle.Regular, GraphicsUnit.Point);
-        lblReplacement.ForeColor = Color.FromArgb(100, 100, 100);
-        lblReplacement.BackColor = Color.White;
-        lblReplacement.Location = new Point(10, 32);
-        lblReplacement.AutoSize = false;
-        lblReplacement.Size = new Size(availableWidth - 200, 20);
-        lblReplacement.Name = $"lblReplacement_{id}";
-        lblReplacement.TextAlign = ContentAlignment.MiddleLeft;
-
-        // Create edit button
-        Button btnEdit = UIStylingService.CreateEditButton(id, entryPanel.Width, 15, BtnEditSnippet_Click, BtnEditSnippet_MouseEnter, BtnEditSnippet_MouseLeave);
-
-        // Create delete button
-        Button btnDelete = UIStylingService.CreateDeleteButton(id, entryPanel.Width, 15, BtnDeleteSnippet_Click, BtnDeleteSnippet_MouseEnter, BtnDeleteSnippet_MouseLeave);
-
-        // Add controls to entry panel
-        entryPanel.Controls.Add(lblShortcut);
-        entryPanel.Controls.Add(lblReplacement);
-        entryPanel.Controls.Add(btnEdit);
-        entryPanel.Controls.Add(btnDelete);
-
-        // Add entry panel to list
-        panelSnippetsList.Controls.Add(entryPanel);
+        var row = dgvSnippets.Rows[e.RowIndex];
+        if (row.Cells["Id"].Value is not int id)
+            return;
+        if (e.ColumnIndex == dgvSnippets.Columns["Edit"].Index)
+            EditSnippetById(id);
+        else if (e.ColumnIndex == dgvSnippets.Columns["Delete"].Index)
+            DeleteSnippetById(id);
     }
 
 
@@ -253,24 +239,23 @@ public class SnippetsPageService
     private void BtnEditSnippet_Click(object? sender, EventArgs e)
     {
         if (sender is Button btn && btn.Tag is int id)
+            EditSnippetById(id);
+    }
+
+    private void EditSnippetById(int id)
+    {
+        if (databaseService == null)
+            return;
+        var snippets = databaseService.GetSnippets(username);
+        var snippet = snippets.FirstOrDefault(s => s.id == id);
+        if (snippet.id == 0)
         {
-            // Find the snippet for this entry
-            if (databaseService == null)
-                return;
-
-            var snippets = databaseService.GetSnippets(username);
-            var snippet = snippets.FirstOrDefault(s => s.id == id);
-
-            if (snippet.id == 0)
-            {
-                MessageBox.Show("Snippet not found.", "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            editingSnippetId = id;
-            ShowSnippetDialog(isAdding: false, shortcut: snippet.shortcut, replacement: snippet.replacement);
+            MessageBox.Show("Snippet not found.", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
         }
+        editingSnippetId = id;
+        ShowSnippetDialog(isAdding: false, shortcut: snippet.shortcut, replacement: snippet.replacement);
     }
 
     private void ShowSnippetDialog(bool isAdding, string shortcut = "", string replacement = "")
@@ -342,35 +327,34 @@ public class SnippetsPageService
 
     private void BtnDeleteSnippet_Click(object? sender, EventArgs e)
     {
-        if (sender is Button btn && btn.Tag is int id && databaseService != null)
+        if (sender is Button btn && btn.Tag is int id)
+            DeleteSnippetById(id);
+    }
+
+    private void DeleteSnippetById(int id)
+    {
+        if (databaseService == null)
+            return;
+        var snippets = databaseService.GetSnippets(username);
+        var snippet = snippets.FirstOrDefault(s => s.id == id);
+        string shortcutText = snippet.id == id ? snippet.shortcut : "this snippet";
+        DialogResult result = MessageBox.Show(
+            $"Are you sure you want to delete \"{shortcutText}\"?",
+            "Confirm Delete",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+        if (result != DialogResult.Yes)
+            return;
+        try
         {
-            // Find the snippet for confirmation message
-            var snippets = databaseService.GetSnippets(username);
-            var snippet = snippets.FirstOrDefault(s => s.id == id);
-
-            string shortcutText = snippet.id == id ? snippet.shortcut : "this snippet";
-
-            DialogResult result = MessageBox.Show(
-                $"Are you sure you want to delete \"{shortcutText}\"?",
-                "Confirm Delete",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
-
-            if (result == DialogResult.Yes)
-            {
-                try
-                {
-                    databaseService.DeleteSnippet(id, username);
-                    LoadSnippetsEntries();
-                    // Invalidate snippets cache
-                    transcriptionCorrectionService?.InvalidateSnippetsCache(username);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Failed to delete snippet: {ex.Message}", "Error",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
+            databaseService.DeleteSnippet(id, username);
+            LoadSnippetsEntries();
+            transcriptionCorrectionService?.InvalidateSnippetsCache(username);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to delete snippet: {ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 

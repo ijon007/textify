@@ -88,6 +88,8 @@ public class HomePageService
         if (databaseService == null)
             return;
 
+        panelSpeechHistory.Controls.Clear();
+
         var speeches = databaseService.GetSpeeches(username);
 
         int yOffset = 10;
